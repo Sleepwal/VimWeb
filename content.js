@@ -24,6 +24,18 @@
   /** @type {number|null} 定时器 ID */
   let bufferTimer = null;
 
+  /** @type {number} 鼠标 X 坐标 */
+  let mouseX = window.innerWidth / 2;
+
+  /** @type {number} 鼠标 Y 坐标 */
+  let mouseY = window.innerHeight / 2;
+
+  // 跟踪鼠标位置
+  document.addEventListener("mousemove", (e) => {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+  }, { passive: true });
+
   // ==========================================
   // 辅助函数
   // ==========================================
@@ -103,6 +115,26 @@
   // ==========================================
 
   /**
+   * 模拟鼠标点击当前光标所在位置的元素
+   * 对应 Space 键
+   */
+  function clickAtCursor() {
+    // 获取光标位置最上层的元素
+    const el = document.elementFromPoint(mouseX, mouseY);
+    
+    if (el) {
+      // 尝试点击元素本身或其最近的可点击祖先
+      const clickable = el.closest('a, button, input, [role="button"]') || el;
+      
+      clickable.focus();
+      clickable.click();
+      
+      // 可选：添加视觉反馈
+      // console.log("Clicked:", clickable);
+    }
+  }
+
+  /**
    * 处理 Vim 风格的按键逻辑
    * 
    * @param {KeyboardEvent} e - 键盘事件对象
@@ -111,6 +143,20 @@
     const key = e.key;
 
     // --- 单键导航指令 ---
+
+    // Space: 点击当前光标位置
+    if (key === " ") {
+      e.preventDefault();
+      clickAtCursor();
+      return;
+    }
+
+    // Q: 返回上一页 (Shift + q 或 q)
+    if (key === "Q" || key === "q") {
+      e.preventDefault();
+      window.history.back();
+      return;
+    }
 
     // j: 向下滚动
     if (key === "j") {
