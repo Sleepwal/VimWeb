@@ -1,0 +1,80 @@
+body {
+  width: 280px;
+  margin: 0;
+  padding: 16px;
+  background-color: #1e1e1e; /* VS Code Dark / Vim Dark */
+  color: #d4d4d4;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 14px;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 1px solid #333;
+  padding-bottom: 8px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 18px;
+  color: #4ec9b0; /* Mint Green */
+}
+
+.version {
+  font-size: 12px;
+  color: #666;
+}
+
+h2 {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  color: #ce9178; /* Orange/Brown */
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.key-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.key-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+kbd {
+  background-color: #333;
+  border: 1px solid #444;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-family: inherit;
+  color: #569cd6; /* Blue */
+  font-weight: bold;
+  min-width: 20px;
+  text-align: center;
+  box-shadow: 0 2px 0 #000;
+}
+
+footer {
+  margin-top: 8px;
+  text-align: center;
+  font-size: 12px;
+  color: #666;
+  font-style: italic;
+  border-top: 1px solid #333;
+  padding-top: 8px;
+}
