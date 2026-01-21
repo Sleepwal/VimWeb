@@ -50,4 +50,4 @@ wim/
 
 ## 📄 License
 
-MIT License
+GNU GENERAL PUBLIC LICENSE
