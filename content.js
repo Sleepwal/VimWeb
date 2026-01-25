@@ -30,6 +30,25 @@
   /** @type {number} 鼠标 Y 坐标 */
   let mouseY = window.innerHeight / 2;
 
+  /** @type {object} 滚动配置 */
+  let scrollSettings = { value: 15, unit: '%' };
+
+  // 初始化设置
+  if (chrome.storage && chrome.storage.sync) {
+    chrome.storage.sync.get(['scrollStep'], (items) => {
+      if (items.scrollStep) {
+        scrollSettings = items.scrollStep;
+      }
+    });
+
+    // 监听设置变更
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === 'sync' && changes.scrollStep) {
+        scrollSettings = changes.scrollStep.newValue;
+      }
+    });
+  }
+
   // 跟踪鼠标位置
   document.addEventListener("mousemove", (e) => {
     mouseX = e.clientX;
@@ -52,6 +71,34 @@
     // 检查 contenteditable 属性或标签名
     return el.isContentEditable ||
       ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName);
+  }
+
+  /**
+   * 执行滚动操作
+   * 支持百分比或像素单位
+   * 
+   * @param {number} dirY - 垂直方向 (1: 下, -1: 上, 0: 无)
+   * @param {number} dirX - 水平方向 (1: 右, -1: 左, 0: 无)
+   */
+  function performScroll(dirY = 0, dirX = 0) {
+    let top = 0;
+    let left = 0;
+
+    // 计算垂直滚动
+    if (dirY !== 0) {
+      if (scrollSettings.unit === '%') {
+        top = window.innerHeight * (scrollSettings.value / 100) * dirY;
+      } else {
+        top = scrollSettings.value * dirY;
+      }
+    }
+
+    // 计算水平滚动 (暂时保持固定 15% 比例，或复用配置)
+    if (dirX !== 0) {
+      left = window.innerWidth * 0.15 * dirX;
+    }
+
+    window.scrollBy({ top, left, behavior: "smooth" });
   }
 
   /**
@@ -161,28 +208,28 @@
     // j: 向下滚动
     if (key === "j") {
       e.preventDefault(); // 阻止浏览器默认滚动（如果有）或其他行为
-      scrollByRatio(0.15); // 滚动 15% 屏幕高度
+      performScroll(1, 0);
       return;
     }
 
     // k: 向上滚动
     if (key === "k") {
       e.preventDefault();
-      scrollByRatio(-0.15);
+      performScroll(-1, 0);
       return;
     }
 
     // h: 向左滚动
     if (key === "h") {
       e.preventDefault();
-      scrollByRatio(0, -0.15);
+      performScroll(0, -1);
       return;
     }
 
     // l: 向右滚动
     if (key === "l") {
       e.preventDefault();
-      scrollByRatio(0, 0.15);
+      performScroll(0, 1);
       return;
     }
 
@@ -226,3 +273,5 @@
   }, true); // true = 捕获阶段监听
 
 })();
+
+
