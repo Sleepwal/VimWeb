@@ -33,6 +33,17 @@
   /** @type {object} 滚动配置 */
   let scrollSettings = { value: 15, unit: '%' };
 
+  // ==========================================
+  // 模式管理
+  // ==========================================
+  const MODE = {
+    NORMAL: 'NORMAL',
+    HINT: 'HINT',
+    INSERT: 'INSERT'
+  };
+
+  let currentMode = MODE.NORMAL;
+
   // 初始化设置
   if (chrome.storage && chrome.storage.sync) {
     chrome.storage.sync.get(['scrollStep'], (items) => {
@@ -189,6 +200,56 @@
   function handleVimKey(e) {
     const key = e.key;
 
+    // --- ESC: 全局退出/复位 ---
+    if (key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (currentMode === MODE.HINT) {
+        if (window.VimHint) window.VimHint.removeHints();
+        currentMode = MODE.NORMAL;
+      } else if (currentMode === MODE.INSERT) {
+        if (document.activeElement) document.activeElement.blur();
+        currentMode = MODE.NORMAL;
+      } else {
+        // Normal 模式下清除缓冲区
+        resetBuffer();
+      }
+      return;
+    }
+
+    // --- Hint 模式处理 ---
+    if (currentMode === MODE.HINT) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // 允许功能键 (如 Backspace 删除输入?)
+      // 简单起见，只允许单字符输入
+      if (key.length === 1) {
+        const finished = window.VimHint.handleInput(key);
+        if (finished) {
+          currentMode = MODE.NORMAL;
+        }
+      }
+      return;
+    }
+    
+    // --- Insert 模式处理 ---
+    if (currentMode === MODE.INSERT) {
+      // 不拦截任何按键，除了上面的 ESC
+      return;
+    }
+
+    // --- Normal 模式逻辑 ---
+
+    // f: 进入 Hint 模式
+    if (key === 'f') {
+      e.preventDefault();
+      currentMode = MODE.HINT;
+      if (window.VimHint) window.VimHint.createHints();
+      return;
+    }
+
     // --- 单键导航指令 ---
 
     // Space: 点击当前光标位置
@@ -255,14 +316,29 @@
     }
   }
 
+  // 自动切换模式
+  document.addEventListener('focus', (e) => {
+    if (isEditable(e.target)) {
+      currentMode = MODE.INSERT;
+    }
+  }, true);
+
+  document.addEventListener('blur', (e) => {
+    setTimeout(() => {
+      if (!isEditable(document.activeElement)) {
+        currentMode = MODE.NORMAL;
+      }
+    }, 10);
+  }, true);
+
   /**
    * 全局键盘事件监听
    * 使用 capture: true (捕获阶段) 以确保优先处理，
    * 防止被页面上的其他事件监听器阻止 (stopImmediatePropagation)。
    */
   document.addEventListener("keydown", (e) => {
-    // 1. 如果焦点在输入框内，不拦截，允许用户正常打字
-    if (isEditable(e.target)) return;
+    // 1. 如果是 Insert 模式，且不是 ESC，直接返回
+    if (currentMode === MODE.INSERT && e.key !== 'Escape') return;
     
     // 2. 如果按下了组合功能键 (Ctrl/Alt/Meta)，通常是浏览器快捷键，放行
     // 注意：Shift 键不在此列，因为 'G' 需要 Shift
