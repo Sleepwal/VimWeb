@@ -1,0 +1,33 @@
+.vim-web-indicator {
+  position: fixed;
+  bottom: 10px;
+  right: 10px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 12px;
+  font-weight: bold;
+  color: #fff;
+  background-color: #333;
+  z-index: 2147483646;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  user-select: none;
+}
+
+.vim-web-indicator.show {
+  opacity: 1;
+}
+
+.vim-web-indicator.mode-normal {
+  background-color: #4caf50; /* 绿色 */
+}
+
+.vim-web-indicator.mode-insert {
+  background-color: #ff9800; /* 橙色 */
+}
+
+.vim-web-indicator.mode-hint {
+  background-color: #2196f3; /* 蓝色 */
+}

@@ -12,6 +12,60 @@
   console.log("[Vim Web] Loaded");
 
   // ==========================================
+  // 黑名单检查
+  // ==========================================
+
+  /**
+   * 检查域名是否匹配黑名单规则
+   * @param {string} hostname - 当前域名
+   * @param {string} pattern - 黑名单规则（支持通配符 *）
+   * @returns {boolean}
+   */
+  function matchBlacklist(hostname, pattern) {
+    pattern = pattern.trim();
+    if (!pattern) return false;
+
+    // 转换为正则表达式
+    const regexPattern = pattern
+      .replace(/\./g, '\\.')
+      .replace(/\*/g, '.*');
+
+    const regex = new RegExp('^' + regexPattern + '$', 'i');
+    return regex.test(hostname);
+  }
+
+  /**
+   * 检查当前页面是否在黑名单中
+   * @param {string} blacklist - 黑名单文本（每行一个规则）
+   * @returns {boolean}
+   */
+  function isBlacklisted(blacklist) {
+    if (!blacklist) return false;
+    const hostname = window.location.hostname;
+    const patterns = blacklist.split('\n');
+    return patterns.some(pattern => matchBlacklist(hostname, pattern));
+  }
+
+  // 检查黑名单并决定是否启用插件
+  if (chrome.storage && chrome.storage.sync) {
+    chrome.storage.sync.get(['blacklist'], (items) => {
+      if (isBlacklisted(items.blacklist)) {
+        console.log('[Vim Web] Disabled on blacklisted domain:', window.location.hostname);
+        return;
+      }
+      initVimWeb();
+    });
+  } else {
+    initVimWeb();
+  }
+
+  /**
+   * 初始化 Vim Web 插件
+   */
+  function initVimWeb() {
+  console.log('[Vim Web] Initialized on', window.location.hostname);
+
+  // ==========================================
   // 状态管理
   // ==========================================
   
@@ -43,6 +97,46 @@
   };
 
   let currentMode = MODE.NORMAL;
+
+  // ==========================================
+  // 模式指示器
+  // ==========================================
+  let indicatorEl = null;
+  let indicatorTimer = null;
+
+  /**
+   * 创建或更新模式指示器
+   * @param {string} mode - 当前模式
+   */
+  function updateIndicator(mode) {
+    if (!indicatorEl) {
+      indicatorEl = document.createElement('div');
+      indicatorEl.className = 'vim-web-indicator';
+      document.body.appendChild(indicatorEl);
+    }
+
+    // 清除之前的定时器
+    if (indicatorTimer) {
+      clearTimeout(indicatorTimer);
+    }
+
+    // 更新文本和样式
+    const modeNames = {
+      [MODE.NORMAL]: 'NORMAL',
+      [MODE.INSERT]: 'INSERT',
+      [MODE.HINT]: 'HINT'
+    };
+
+    indicatorEl.textContent = modeNames[mode] || mode;
+    indicatorEl.className = `vim-web-indicator mode-${mode.toLowerCase()} show`;
+
+    // 3秒后淡出
+    indicatorTimer = setTimeout(() => {
+      if (indicatorEl) {
+        indicatorEl.classList.remove('show');
+      }
+    }, 3000);
+  }
 
   // 初始化设置
   if (chrome.storage && chrome.storage.sync) {
@@ -104,9 +198,13 @@
       }
     }
 
-    // 计算水平滚动 (暂时保持固定 15% 比例，或复用配置)
+    // 计算水平滚动 (复用 scrollSettings 配置)
     if (dirX !== 0) {
-      left = window.innerWidth * 0.15 * dirX;
+      if (scrollSettings.unit === '%') {
+        left = window.innerWidth * (scrollSettings.value / 100) * dirX;
+      } else {
+        left = scrollSettings.value * dirX;
+      }
     }
 
     window.scrollBy({ top, left, behavior: "smooth" });
@@ -179,22 +277,77 @@
   function clickAtCursor() {
     // 获取光标位置最上层的元素
     const el = document.elementFromPoint(mouseX, mouseY);
-    
+
     if (el) {
       // 尝试点击元素本身或其最近的可点击祖先
       const clickable = el.closest('a, button, input, [role="button"]') || el;
-      
+
       clickable.focus();
       clickable.click();
-      
+
       // 可选：添加视觉反馈
       // console.log("Clicked:", clickable);
     }
   }
 
   /**
+   * Normal 模式单键命令映射表
+   * 键: 执行函数 (返回 true 表示命令执行后需要清空缓冲区)
+   */
+  const normalKeyMap = {
+    'f': () => {
+      currentMode = MODE.HINT;
+      updateIndicator(currentMode);
+      if (window.VimHint) window.VimHint.createHints();
+      return false;
+    },
+    ' ': () => {
+      clickAtCursor();
+      return false;
+    },
+    'q': () => {
+      window.history.back();
+      return false;
+    },
+    'Q': () => {
+      window.history.back();
+      return false;
+    },
+    'j': () => {
+      performScroll(1, 0);
+      return false;
+    },
+    'k': () => {
+      performScroll(-1, 0);
+      return false;
+    },
+    'h': () => {
+      performScroll(0, -1);
+      return false;
+    },
+    'l': () => {
+      performScroll(0, 1);
+      return false;
+    },
+    'G': () => {
+      scrollToBottom();
+      return true;
+    }
+  };
+
+  /**
+   * 多键命令处理函数映射表
+   * 键: 执行函数
+   */
+  const multiKeyCommands = {
+    'gg': () => {
+      scrollToTop();
+    }
+  };
+
+  /**
    * 处理 Vim 风格的按键逻辑
-   * 
+   *
    * @param {KeyboardEvent} e - 键盘事件对象
    */
   function handleVimKey(e) {
@@ -208,9 +361,11 @@
       if (currentMode === MODE.HINT) {
         if (window.VimHint) window.VimHint.removeHints();
         currentMode = MODE.NORMAL;
+        updateIndicator(currentMode);
       } else if (currentMode === MODE.INSERT) {
         if (document.activeElement) document.activeElement.blur();
         currentMode = MODE.NORMAL;
+        updateIndicator(currentMode);
       } else {
         // Normal 模式下清除缓冲区
         resetBuffer();
@@ -222,18 +377,19 @@
     if (currentMode === MODE.HINT) {
       e.preventDefault();
       e.stopPropagation();
-      
+
       // 允许功能键 (如 Backspace 删除输入?)
       // 简单起见，只允许单字符输入
       if (key.length === 1) {
         const finished = window.VimHint.handleInput(key);
         if (finished) {
           currentMode = MODE.NORMAL;
+          updateIndicator(currentMode);
         }
       }
       return;
     }
-    
+
     // --- Insert 模式处理 ---
     if (currentMode === MODE.INSERT) {
       // 不拦截任何按键，除了上面的 ESC
@@ -242,76 +398,24 @@
 
     // --- Normal 模式逻辑 ---
 
-    // f: 进入 Hint 模式
-    if (key === 'f') {
+    // 首先尝试直接执行单键命令
+    if (normalKeyMap[key]) {
       e.preventDefault();
-      currentMode = MODE.HINT;
-      if (window.VimHint) window.VimHint.createHints();
+      const shouldReset = normalKeyMap[key]();
+      if (shouldReset) {
+        resetBuffer();
+      }
       return;
     }
 
-    // --- 单键导航指令 ---
-
-    // Space: 点击当前光标位置
-    if (key === " ") {
-      e.preventDefault();
-      clickAtCursor();
-      return;
-    }
-
-    // Q: 返回上一页 (Shift + q 或 q)
-    if (key === "Q" || key === "q") {
-      e.preventDefault();
-      window.history.back();
-      return;
-    }
-
-    // j: 向下滚动
-    if (key === "j") {
-      e.preventDefault(); // 阻止浏览器默认滚动（如果有）或其他行为
-      performScroll(1, 0);
-      return;
-    }
-
-    // k: 向上滚动
-    if (key === "k") {
-      e.preventDefault();
-      performScroll(-1, 0);
-      return;
-    }
-
-    // h: 向左滚动
-    if (key === "h") {
-      e.preventDefault();
-      performScroll(0, -1);
-      return;
-    }
-
-    // l: 向右滚动
-    if (key === "l") {
-      e.preventDefault();
-      performScroll(0, 1);
-      return;
-    }
-
-    // --- 组合键/特殊指令 ---
-
-    // G: 直接到底部 (Shift + g)
-    if (key === "G") {
-      e.preventDefault();
-      scrollToBottom();
-      resetBuffer();
-      return;
-    }
-
-    // 将按键加入缓冲区以检测多键命令 (如 'gg')
+    // 将按键加入缓冲区以检测多键命令
     pushKey(key);
 
-    // gg: 回到顶部
-    if (keyBuffer === "gg") {
+    // 检查多键命令
+    if (multiKeyCommands[keyBuffer]) {
       e.preventDefault();
-      scrollToTop();
-      resetBuffer(); // 命令执行成功，清空缓冲
+      multiKeyCommands[keyBuffer]();
+      resetBuffer();
       return;
     }
   }
@@ -320,6 +424,7 @@
   document.addEventListener('focus', (e) => {
     if (isEditable(e.target)) {
       currentMode = MODE.INSERT;
+      updateIndicator(currentMode);
     }
   }, true);
 
@@ -327,6 +432,7 @@
     setTimeout(() => {
       if (!isEditable(document.activeElement)) {
         currentMode = MODE.NORMAL;
+        updateIndicator(currentMode);
       }
     }, 10);
   }, true);
@@ -339,14 +445,27 @@
   document.addEventListener("keydown", (e) => {
     // 1. 如果是 Insert 模式，且不是 ESC，直接返回
     if (currentMode === MODE.INSERT && e.key !== 'Escape') return;
-    
-    // 2. 如果按下了组合功能键 (Ctrl/Alt/Meta)，通常是浏览器快捷键，放行
+
+    // 2. 特殊处理 Ctrl+d / Ctrl+u (半页滚动)
+    if (e.ctrlKey && (e.key === 'd' || e.key === 'u')) {
+      e.preventDefault();
+      if (e.key === 'd') {
+        scrollByRatio(0.5, 0); // 向下半页
+      } else {
+        scrollByRatio(-0.5, 0); // 向上半页
+      }
+      return;
+    }
+
+    // 3. 如果按下了其他组合功能键 (Ctrl/Alt/Meta)，通常是浏览器快捷键，放行
     // 注意：Shift 键不在此列，因为 'G' 需要 Shift
     if (e.metaKey || e.ctrlKey || e.altKey) return;
 
-    // 3. 进入 Vim 处理逻辑
+    // 4. 进入 Vim 处理逻辑
     handleVimKey(e);
   }, true); // true = 捕获阶段监听
+
+  } // end of initVimWeb function
 
 })();
 

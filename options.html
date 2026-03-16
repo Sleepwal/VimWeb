@@ -68,6 +68,20 @@
           <span id="save-status" class="save-status"></span>
         </div>
       </section>
+
+      <section class="setting-group">
+        <h2>黑名单</h2>
+        <p class="description">在以下域名上禁用 Vim Web（每行一个域名，如 gmail.com）。支持通配符 *。</p>
+
+        <div class="control-row">
+          <textarea id="blacklist" rows="6" placeholder="例如：
+gmail.com
+notion.so
+*.example.com"></textarea>
+        </div>
+
+        <div id="blacklist-status" class="save-status"></div>
+      </section>
     </main>
   </div>
   <script src="options.js"></script>

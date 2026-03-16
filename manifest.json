@@ -17,7 +17,7 @@
     {
       "matches": ["<all_urls>"],
       "js": ["hint.js", "content.js"],
-      "css": ["hint.css"],
+      "css": ["hint.css", "indicator.css"],
       "run_at": "document_idle"
     }
   ]

@@ -1,5 +1,6 @@
 const DEFAULT_SETTINGS = {
-  scrollStep: { value: 15, unit: '%' }
+  scrollStep: { value: 15, unit: '%' },
+  blacklist: ''
 };
 
 const presetSelect = document.getElementById('preset-select');
@@ -9,6 +10,8 @@ const resetBtn = document.getElementById('reset-btn');
 const saveStatus = document.getElementById('save-status');
 const validationMsg = document.getElementById('validation-msg');
 const previewContainer = document.getElementById('preview-container');
+const blacklistInput = document.getElementById('blacklist');
+const blacklistStatus = document.getElementById('blacklist-status');
 
 // 初始化
 document.addEventListener('DOMContentLoaded', restoreOptions);
@@ -18,6 +21,11 @@ presetSelect.addEventListener('change', handlePresetChange);
 scrollValueInput.addEventListener('input', handleInputChange);
 scrollUnitSelect.addEventListener('change', handleInputChange);
 resetBtn.addEventListener('click', resetOptions);
+
+// 黑名单输入监听
+if (blacklistInput) {
+  blacklistInput.addEventListener('input', debounce(saveBlacklist, 500));
+}
 
 // 预览区域的简单键盘监听 (模拟 content.js 的行为)
 previewContainer.addEventListener('keydown', (e) => {
@@ -53,6 +61,9 @@ function getCurrentSettings() {
 function restoreOptions() {
   chrome.storage.sync.get(DEFAULT_SETTINGS, (items) => {
     updateUI(items.scrollStep);
+    if (blacklistInput) {
+      blacklistInput.value = items.blacklist || '';
+    }
   });
 }
 
@@ -139,4 +150,29 @@ function showStatus(text) {
   statusTimer = setTimeout(() => {
     saveStatus.classList.remove('show');
   }, 2000);
+}
+
+// 防抖函数
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
+
+// 保存黑名单
+function saveBlacklist() {
+  const blacklist = blacklistInput.value;
+  chrome.storage.sync.set({ blacklist }, () => {
+    blacklistStatus.textContent = '已保存';
+    blacklistStatus.classList.add('show');
+    setTimeout(() => {
+      blacklistStatus.classList.remove('show');
+    }, 2000);
+  });
 }
