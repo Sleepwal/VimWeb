@@ -8,7 +8,7 @@
  * 4. 存储管理器
  */
 window.VimWebUtils = (() => {
-  const BLACKLIST_PATTERN_REGEX = /^[a-zA-Z0-9.\-*]+$/;
+  const BLACKLIST_PATTERN_REGEX = /^[a-zA-Z0-9._\-*]+$/;
 
   const Validators = {
     scrollStep(value) {

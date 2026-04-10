@@ -27,7 +27,9 @@ chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
   if (removeInfo.isWindowClosing) return;
 
   const tabInfo = tabInfoMap.get(tabId);
-  if (tabInfo && tabInfo.url) {
+  if (!tabInfo) return;
+
+  if (tabInfo.url) {
     closedTabStack.unshift({ url: tabInfo.url, title: tabInfo.title, tabId });
     if (closedTabStack.length > MAX_CLOSED_TABS) {
       closedTabStack.pop();
