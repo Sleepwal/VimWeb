@@ -7,6 +7,7 @@
  * 2. 维护按键缓冲区 (处理多键命令如 'gg')
  * 3. 执行页面滚动和导航操作
  * 4. 避免干扰原生输入框操作
+ * 5. 集成搜索、自定义快捷键等高级功能
  */
 (() => {
   const Utils = window.VimWebUtils;
@@ -16,12 +17,17 @@
   // 黑名单检查
   // ==========================================
   (async function checkBlacklist() {
-    const items = await Utils.StorageManager.get(['blacklist']);
-    if (Utils.isBlacklisted(items.blacklist)) {
-      console.log('[Vim Web] Disabled on blacklisted domain:', window.location.hostname);
-      return;
+    try {
+      const items = await Utils.StorageManager.get(['blacklist']);
+      if (Utils.isBlacklisted(items.blacklist)) {
+        console.log('[Vim Web] Disabled on blacklisted domain:', window.location.hostname);
+        return;
+      }
+      initVimWeb();
+    } catch (error) {
+      Utils.ErrorHandler.handle(error, { phase: 'blacklist_check' });
+      initVimWeb();
     }
-    initVimWeb();
   })();
 
   function initVimWeb() {
@@ -62,7 +68,11 @@
     class ScrollHandler {
       constructor() {
         this.settings = { value: 15, unit: '%' };
+        this._scrollRAF = null;
+        this._cachedViewportH = window.innerHeight;
+        this._cachedViewportW = window.innerWidth;
         this._initSettings();
+        this._initViewportCache();
       }
 
       async _initSettings() {
@@ -77,34 +87,51 @@
         });
       }
 
+      _initViewportCache() {
+        window.addEventListener('resize', Utils.debounce(() => {
+          this._cachedViewportH = window.innerHeight;
+          this._cachedViewportW = window.innerWidth;
+        }, 100), { passive: true });
+      }
+
       perform(dirY = 0, dirX = 0) {
-        let top = 0;
-        let left = 0;
+        if (this._scrollRAF) return;
 
-        if (dirY !== 0) {
-          if (this.settings.unit === '%') {
-            top = window.innerHeight * (this.settings.value / 100) * dirY;
-          } else {
-            top = this.settings.value * dirY;
+        this._scrollRAF = requestAnimationFrame(() => {
+          let top = 0;
+          let left = 0;
+
+          if (dirY !== 0) {
+            if (this.settings.unit === '%') {
+              top = this._cachedViewportH * (this.settings.value / 100) * dirY;
+            } else {
+              top = this.settings.value * dirY;
+            }
           }
-        }
 
-        if (dirX !== 0) {
-          if (this.settings.unit === '%') {
-            left = window.innerWidth * (this.settings.value / 100) * dirX;
-          } else {
-            left = this.settings.value * dirX;
+          if (dirX !== 0) {
+            if (this.settings.unit === '%') {
+              left = this._cachedViewportW * (this.settings.value / 100) * dirX;
+            } else {
+              left = this.settings.value * dirX;
+            }
           }
-        }
 
-        window.scrollBy({ top, left, behavior: "smooth" });
+          window.scrollBy({ top, left, behavior: "smooth" });
+          this._scrollRAF = null;
+        });
       }
 
       byRatio(ratioY = 0, ratioX = 0) {
-        window.scrollBy({
-          top: window.innerHeight * ratioY,
-          left: window.innerWidth * ratioX,
-          behavior: "smooth"
+        if (this._scrollRAF) return;
+
+        this._scrollRAF = requestAnimationFrame(() => {
+          window.scrollBy({
+            top: this._cachedViewportH * ratioY,
+            left: this._cachedViewportW * ratioX,
+            behavior: "smooth"
+          });
+          this._scrollRAF = null;
         });
       }
 
@@ -137,7 +164,8 @@
         const modeNames = {
           NORMAL: 'NORMAL',
           INSERT: 'INSERT',
-          HINT: 'HINT'
+          HINT: 'HINT',
+          SEARCH: 'SEARCH'
         };
 
         Utils.DOMSafe.setText(this.el, modeNames[mode] || mode);
@@ -168,7 +196,8 @@
         this.MODE = {
           NORMAL: 'NORMAL',
           HINT: 'HINT',
-          INSERT: 'INSERT'
+          INSERT: 'INSERT',
+          SEARCH: 'SEARCH'
         };
         this.current = this.MODE.NORMAL;
         this.indicator = indicator;
@@ -193,6 +222,10 @@
 
       isNormal() {
         return this.current === this.MODE.NORMAL;
+      }
+
+      isSearch() {
+        return this.current === this.MODE.SEARCH;
       }
     }
 
@@ -219,12 +252,95 @@
     }
 
     // ==========================================
+    // KeyMapper 类
+    // ==========================================
+    class KeyMapper {
+      constructor() {
+        this.defaultMappings = {
+          'j': 'scrollDown',
+          'k': 'scrollUp',
+          'h': 'scrollLeft',
+          'l': 'scrollRight',
+          'gg': 'scrollToTop',
+          'G': 'scrollToBottom',
+          'f': 'enterHintMode',
+          ' ': 'clickAtCursor',
+          'q': 'goBack',
+          'Q': 'goBack',
+          'x': 'closeTab',
+          'X': 'restoreTab',
+          'gt': 'nextTab',
+          'gT': 'prevTab',
+          '/': 'openSearch',
+          'n': 'searchNext',
+          'N': 'searchPrev',
+          '*': 'searchWordUnderCursor'
+        };
+        this.userMappings = {};
+        this._init();
+      }
+
+      async _init() {
+        const items = await Utils.StorageManager.get(['keyMappings']);
+        if (items.keyMappings && Object.keys(items.keyMappings).length > 0) {
+          this.userMappings = items.keyMappings;
+        }
+        Utils.StorageManager.onChange((changes) => {
+          if (changes.keyMappings) {
+            this.userMappings = changes.keyMappings;
+          }
+        });
+      }
+
+      getAction(key) {
+        return this.userMappings[key] || this.defaultMappings[key];
+      }
+
+      getActionForKey(key) {
+        const action = this.getAction(key);
+        return action;
+      }
+
+      getAllMappings() {
+        return { ...this.defaultMappings, ...this.userMappings };
+      }
+
+      getUserMappings() {
+        return { ...this.userMappings };
+      }
+
+      async setMapping(key, action) {
+        this.userMappings[key] = action;
+        await Utils.StorageManager.set({ keyMappings: this.userMappings });
+      }
+
+      async removeMapping(key) {
+        delete this.userMappings[key];
+        await Utils.StorageManager.set({ keyMappings: this.userMappings });
+      }
+
+      async resetMappings() {
+        this.userMappings = {};
+        await Utils.StorageManager.set({ keyMappings: {} });
+      }
+
+      async importMappings(mappings) {
+        if (!Utils.Validators.keyMappings(mappings)) {
+          throw new Error('Invalid key mappings format');
+        }
+        this.userMappings = { ...mappings };
+        await Utils.StorageManager.set({ keyMappings: this.userMappings });
+      }
+    }
+
+    // ==========================================
     // 初始化实例
     // ==========================================
     const keyBuffer = new KeyBuffer();
     const scrollHandler = new ScrollHandler();
     const indicator = new Indicator();
     const modeManager = new ModeManager(indicator);
+    const keyMapper = new KeyMapper();
 
     let mouseX = window.innerWidth / 2;
     let mouseY = window.innerHeight / 2;
@@ -254,65 +370,42 @@
     }
 
     // ==========================================
-    // 命令映射
+    // 命令执行器
     // ==========================================
-    const normalKeyMap = {
-      'f': () => {
+    const commandActions = {
+      scrollDown: () => { scrollHandler.perform(1, 0); return false; },
+      scrollUp: () => { scrollHandler.perform(-1, 0); return false; },
+      scrollLeft: () => { scrollHandler.perform(0, -1); return false; },
+      scrollRight: () => { scrollHandler.perform(0, 1); return false; },
+      scrollToTop: () => { scrollHandler.toTop(); },
+      scrollToBottom: () => { scrollHandler.toBottom(); return true; },
+      enterHintMode: () => {
         modeManager.switchTo(modeManager.MODE.HINT);
         if (window.VimHint) window.VimHint.createHints();
         return false;
       },
-      ' ': () => {
-        clickAtCursor();
+      clickAtCursor: () => { clickAtCursor(); return false; },
+      goBack: () => { window.history.back(); return false; },
+      closeTab: () => { TabMessenger.send('closeCurrentTab'); return false; },
+      restoreTab: () => { TabMessenger.send('restoreLastTab'); return false; },
+      nextTab: () => { TabMessenger.send('nextTab'); },
+      prevTab: () => { TabMessenger.send('prevTab'); },
+      openSearch: () => {
+        modeManager.switchTo(modeManager.MODE.SEARCH);
+        if (window.VimSearch) window.VimSearch.open();
         return false;
       },
-      'q': () => {
-        window.history.back();
+      searchNext: () => {
+        if (window.VimSearch) window.VimSearch.next();
         return false;
       },
-      'Q': () => {
-        window.history.back();
+      searchPrev: () => {
+        if (window.VimSearch) window.VimSearch.prev();
         return false;
       },
-      'j': () => {
-        scrollHandler.perform(1, 0);
+      searchWordUnderCursor: () => {
+        if (window.VimSearch) window.VimSearch.searchWordUnderCursor();
         return false;
-      },
-      'k': () => {
-        scrollHandler.perform(-1, 0);
-        return false;
-      },
-      'h': () => {
-        scrollHandler.perform(0, -1);
-        return false;
-      },
-      'l': () => {
-        scrollHandler.perform(0, 1);
-        return false;
-      },
-      'G': () => {
-        scrollHandler.toBottom();
-        return true;
-      },
-      'x': () => {
-        TabMessenger.send('closeCurrentTab');
-        return false;
-      },
-      'X': () => {
-        TabMessenger.send('restoreLastTab');
-        return false;
-      }
-    };
-
-    const multiKeyCommands = {
-      'gg': () => {
-        scrollHandler.toTop();
-      },
-      'gt': () => {
-        TabMessenger.send('nextTab');
-      },
-      'gT': () => {
-        TabMessenger.send('prevTab');
       }
     };
 
@@ -328,6 +421,9 @@
 
         if (modeManager.isHint()) {
           if (window.VimHint) window.VimHint.removeHints();
+          modeManager.switchTo(modeManager.MODE.NORMAL);
+        } else if (modeManager.isSearch()) {
+          if (window.VimSearch) window.VimSearch.close();
           modeManager.switchTo(modeManager.MODE.NORMAL);
         } else if (modeManager.isInsert()) {
           if (document.activeElement) document.activeElement.blur();
@@ -351,22 +447,28 @@
         return;
       }
 
+      if (modeManager.isSearch()) {
+        return;
+      }
+
       if (modeManager.isInsert()) {
         return;
       }
 
-      if (normalKeyMap[key]) {
+      const action = keyMapper.getActionForKey(key);
+      if (action && commandActions[action]) {
         e.preventDefault();
-        const shouldReset = normalKeyMap[key]();
-        if (shouldReset) keyBuffer.reset();
+        const result = commandActions[action]();
+        if (result === true) keyBuffer.reset();
         return;
       }
 
       keyBuffer.push(key);
 
-      if (multiKeyCommands[keyBuffer.value]) {
+      const multiAction = keyMapper.getActionForKey(keyBuffer.value);
+      if (multiAction && commandActions[multiAction]) {
         e.preventDefault();
-        multiKeyCommands[keyBuffer.value]();
+        commandActions[multiAction]();
         keyBuffer.reset();
         return;
       }

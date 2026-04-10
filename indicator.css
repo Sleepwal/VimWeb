@@ -21,13 +21,17 @@
 }
 
 .vim-web-indicator.mode-normal {
-  background-color: #4caf50; /* 绿色 */
+  background-color: #4caf50;
 }
 
 .vim-web-indicator.mode-insert {
-  background-color: #ff9800; /* 橙色 */
+  background-color: #ff9800;
 }
 
 .vim-web-indicator.mode-hint {
-  background-color: #2196f3; /* 蓝色 */
+  background-color: #2196f3;
+}
+
+.vim-web-indicator.mode-search {
+  background-color: #9c27b0;
 }
