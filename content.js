@@ -34,6 +34,7 @@
    */
   (async function checkBlacklist() {
     try {
+      await Utils.StorageManager.migrate();
       const items = await Utils.StorageManager.get(['blacklist']);
       if (Utils.isBlacklisted(items.blacklist)) {
         console.log('[Vim Web] Disabled on blacklisted domain:', window.location.hostname);
@@ -456,7 +457,13 @@
           '/': 'openSearch',
           'n': 'searchNext',
           'N': 'searchPrev',
-          '*': 'searchWordUnderCursor'
+          '*': 'searchWordUnderCursor',
+          'B': 'openBookmarks',
+          'H': 'openHistory',
+          'gi': 'jumpToLastInput',
+          'gI': 'jumpToFirstInput',
+          ']]': 'jumpToNextLink',
+          '[[': 'jumpToPrevLink'
         };
         /** @type {Object<string, string>} 用户自定义映射，优先于默认映射 */
         this.userMappings = {};
@@ -666,6 +673,30 @@
       searchWordUnderCursor: () => {
         if (window.VimSearch) window.VimSearch.searchWordUnderCursor();
         return false;
+      },
+      openBookmarks: () => {
+        if (window.VimBookmarks) window.VimBookmarks.openBookmarks();
+        return false;
+      },
+      openHistory: () => {
+        if (window.VimBookmarks) window.VimBookmarks.openHistory();
+        return false;
+      },
+      jumpToLastInput: () => {
+        if (window.VimJumper) window.VimJumper.jumpToLastInput();
+        return false;
+      },
+      jumpToFirstInput: () => {
+        if (window.VimJumper) window.VimJumper.jumpToFirstInput();
+        return false;
+      },
+      jumpToNextLink: () => {
+        if (window.VimJumper) window.VimJumper.jumpToNextLink();
+        return false;
+      },
+      jumpToPrevLink: () => {
+        if (window.VimJumper) window.VimJumper.jumpToPrevLink();
+        return false;
       }
     };
 
@@ -701,6 +732,8 @@
         } else if (modeManager.isSearch()) {
           if (window.VimSearch) window.VimSearch.close();
           modeManager.switchTo(modeManager.MODE.NORMAL);
+        } else if (window.VimBookmarks && window.VimBookmarks.isActive) {
+          window.VimBookmarks.close();
         } else if (modeManager.isInsert()) {
           if (document.activeElement) document.activeElement.blur();
           modeManager.switchTo(modeManager.MODE.NORMAL);
@@ -766,6 +799,7 @@
     document.addEventListener('focus', (e) => {
       if (isEditable(e.target)) {
         modeManager.switchTo(modeManager.MODE.INSERT);
+        if (window.VimJumper) window.VimJumper.recordLastInput(e.target);
       }
     }, true);
 

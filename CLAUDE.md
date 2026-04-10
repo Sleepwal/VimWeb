@@ -24,9 +24,12 @@ wim/
 ├── content.js          # Core keyboard handling, mode management, key buffer, scroll handler, key mapper
 ├── hint.js             # F-mode hint system (exposed as window.VimHint)
 ├── search.js           # Page search system (exposed as window.VimSearch)
+├── bookmarks.js        # Bookmarks & history browser (exposed as window.VimBookmarks)
+├── jumper.js           # Element jumper (exposed as window.VimJumper)
 ├── hint.css            # Hint overlay styles
 ├── indicator.css       # Mode indicator styles (NORMAL/INSERT/HINT/SEARCH)
 ├── search.css          # Search UI and highlight styles
+├── bookmarks.css       # Bookmarks & history list styles
 ├── options.js/html/css # Extension settings page (scroll step, key mappings, blacklist)
 ├── popup.html/css      # Help popup UI
 └── doc/                # Development documentation
@@ -46,20 +49,27 @@ wim/
 
 **Search System** (in search.js):
 - `VimSearch`: Page text search with TreeWalker-based matching, highlight, and navigation
-- Supports / (open search), n/N (next/prev), * (search word under cursor)
-- Highlight with mark elements, current match indicator
+
+**Bookmarks & History** (in bookmarks.js):
+- `VimBookmarks`: Shared UI for browsing bookmarks (B) and history (H)
+- Uses chrome.bookmarks and chrome.history APIs
+- Keyboard navigation (j/k, Enter, Esc), search filtering
+
+**Element Jumper** (in jumper.js):
+- `VimJumper`: Quick navigation to page elements
+- gi/gI: Jump to last/first input field
+- ]]/[[: Jump to next/prev semantic link
 
 **Background Script** (background.js):
 - Handles tab operations: next/prev tab, close tab, restore closed tab
 - Maintains tabInfoMap for proactive tab info tracking
 - Maintains a stack of recently closed tabs (max 10)
-- Responds to messages from content scripts
 
 **Shared Utilities** (utils.js - window.VimWebUtils):
 - `Validators`: Validates scrollStep, blacklist patterns, keyMappings
 - `DOMSafe`: Safe DOM creation and text setting (prevents XSS)
 - `ErrorHandler`: Centralized error handling with log, wrap, wrapAsync, showUserError
-- `StorageManager`: Async storage access with validation, defaults, and change notification
+- `StorageManager`: Async storage with in-memory cache, validation, defaults, change notification, and config migration
 - `matchBlacklist`/`isBlacklisted`: Blacklist matching with input validation
 - `debounce`: Utility debounce function
 
@@ -70,12 +80,12 @@ wim/
 - `SEARCH`: Search mode for page text search
 
 **Key Commands** (default mappings):
-- Single-key: j/k/h/l (scroll), f (hint), Space (click at cursor), q/Q (back), G (bottom), x (close tab), X (restore tab), / (search), n (next match), N (prev match), * (search word)
-- Multi-key: gg (top), gt (next tab), gT (prev tab)
+- Single-key: j/k/h/l (scroll), f (hint), Space (click at cursor), q/Q (back), G (bottom), x (close tab), X (restore tab), / (search), n (next match), N (prev match), * (search word), B (bookmarks), H (history)
+- Multi-key: gg (top), gt (next tab), gT (prev tab), gi (last input), gI (first input), ]] (next link), [[ (prev link)
 - Ctrl combos: Ctrl+d (half page down), Ctrl+u (half page up)
 - Escape: Exit current mode
 
-**Command System**: KeyMapper resolves keys to action names, commandActions map executes them. This allows user-customizable key bindings.
+**Command System**: KeyMapper resolves keys to action names, commandActions map executes them.
 
 **Storage Schema**:
 ```javascript
@@ -83,9 +93,11 @@ wim/
   scrollStep: { value: number, unit: '%' | 'px' },
   blacklist: string,  // newline-separated domain patterns, supports wildcards (*)
   keyMappings: { [key: string]: string },  // user key mapping overrides
-  configVersion: number  // schema version for migration
+  configVersion: number  // schema version for migration (currently 3)
 }
 ```
+
+**Config Migration**: StorageManager.migrate() runs on content script init. Each version has a migration function in _migrations table.
 
 ### Code Style
 - Use vanilla JavaScript (ES6+) with JSDoc comments
