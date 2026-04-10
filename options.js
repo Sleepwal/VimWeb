@@ -73,7 +73,13 @@ const ACTION_NAMES = {
   openSearch: '打开搜索',
   searchNext: '下一个匹配',
   searchPrev: '上一个匹配',
-  searchWordUnderCursor: '搜索光标下单词'
+  searchWordUnderCursor: '搜索光标下单词',
+  openBookmarks: '打开书签',
+  openHistory: '打开历史记录',
+  jumpToLastInput: '上一个输入框',
+  jumpToFirstInput: '第一个输入框',
+  jumpToNextLink: '下一页链接',
+  jumpToPrevLink: '上一页链接'
 };
 
 /**
@@ -99,7 +105,13 @@ const DEFAULT_KEY_MAPPINGS = {
   '/': 'openSearch',
   'n': 'searchNext',
   'N': 'searchPrev',
-  '*': 'searchWordUnderCursor'
+  '*': 'searchWordUnderCursor',
+  'B': 'openBookmarks',
+  'H': 'openHistory',
+  'gi': 'jumpToLastInput',
+  'gI': 'jumpToFirstInput',
+  ']]': 'jumpToNextLink',
+  '[[': 'jumpToPrevLink'
 };
 
 /** @type {Object<string, string>} 用户自定义映射（从存储加载） */
