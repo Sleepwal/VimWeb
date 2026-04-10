@@ -279,80 +279,94 @@ window.VimWebUtils = (() => {
    *       keyMappings 的值不宜过大。
    */
   const StorageManager = {
-    /**
-     * 默认配置值
-     *
-     * 当存储中没有对应键值时，使用这些默认值。
-     * 同时作为 chrome.storage.sync.get() 的默认值参数。
-     *
-     * @type {Object}
-     * @property {Object} scrollStep - 默认滚动步长：15% 屏幕高度
-     * @property {string} blacklist - 默认黑名单：空（不禁用任何域名）
-     * @property {Object} keyMappings - 默认自定义映射：空对象（使用内置默认）
-     * @property {number} configVersion - 配置版本号，用于数据迁移
-     */
     DEFAULTS: {
       scrollStep: { value: 15, unit: '%' },
       blacklist: '',
       keyMappings: {},
-      configVersion: 2
+      configVersion: 3
     },
 
+    /** @type {Map<string, *>} 内存缓存，避免频繁读取 chrome.storage */
+    _cache: new Map(),
+    /** @type {boolean} 缓存是否已初始化 */
+    _cacheInitialized: false,
+
     /**
-     * 异步读取存储数据
+     * 配置迁移表
      *
-     * 读取时自动调用 _validateAndFix 验证数据完整性，
-     * 如果数据无效则自动回退到默认值。
+     * 每个版本号对应一个迁移函数，将旧版本配置转换为新版本格式。
+     * 迁移按版本号顺序执行，确保从任意旧版本都能升级到最新版本。
      *
-     * @param {string[]|Object} keys - 要读取的键名数组，或带默认值的对象
-     * @returns {Promise<Object>} 包含请求键值对的对象
-     *
-     * @example
-     * // 读取单个配置
-     * const items = await StorageManager.get(['scrollStep']);
-     *
-     * @example
-     * // 读取带默认值的配置
-     * const items = await StorageManager.get({ scrollStep: { value: 20, unit: '%' } });
+     * @type {Object<number, Function>}
      */
+    _migrations: {
+      1: (config) => {
+        if (!config.keyMappings) config.keyMappings = {};
+        return config;
+      },
+      2: (config) => {
+        if (!config.configVersion) config.configVersion = 2;
+        return config;
+      },
+      3: (config) => {
+        return config;
+      }
+    },
+
     async get(keys) {
+      const keyList = Array.isArray(keys) ? keys : Object.keys(keys);
+
+      if (this._cacheInitialized) {
+        const cached = {};
+        const missing = [];
+        keyList.forEach(k => {
+          if (this._cache.has(k)) {
+            cached[k] = this._cache.get(k);
+          } else {
+            missing.push(k);
+          }
+        });
+
+        if (missing.length === 0) return cached;
+
+        const stored = await this._readFromStorage(missing);
+        Object.assign(cached, stored);
+        return cached;
+      }
+
+      return this._readFromStorage(keyList);
+    },
+
+    async _readFromStorage(keyList) {
       return new Promise((resolve) => {
         if (!chrome.storage || !chrome.storage.sync) {
           const result = {};
-          if (Array.isArray(keys)) {
-            keys.forEach(k => { result[k] = this.DEFAULTS[k]; });
-          } else {
-            Object.keys(keys).forEach(k => { result[k] = this.DEFAULTS[k] !== undefined ? this.DEFAULTS[k] : keys[k]; });
-          }
+          keyList.forEach(k => { result[k] = this.DEFAULTS[k]; });
           resolve(result);
           return;
         }
 
         chrome.storage.sync.get(this.DEFAULTS, (items) => {
           const result = {};
-          const keyList = Array.isArray(keys) ? keys : Object.keys(keys);
           keyList.forEach(k => {
             if (items[k] !== undefined) {
               result[k] = this._validateAndFix(k, items[k]);
-            } else if (!Array.isArray(keys)) {
-              result[k] = keys[k];
+            } else {
+              result[k] = this.DEFAULTS[k];
             }
+            this._cache.set(k, result[k]);
           });
+          this._cacheInitialized = true;
           resolve(result);
         });
       });
     },
 
-    /**
-     * 异步写入存储数据
-     *
-     * @param {Object} items - 要写入的键值对对象
-     * @returns {Promise<void>}
-     *
-     * @example
-     * await StorageManager.set({ scrollStep: { value: 20, unit: '%' } });
-     */
     async set(items) {
+      Object.entries(items).forEach(([k, v]) => {
+        this._cache.set(k, v);
+      });
+
       return new Promise((resolve) => {
         if (!chrome.storage || !chrome.storage.sync) {
           resolve();
@@ -362,18 +376,31 @@ window.VimWebUtils = (() => {
       });
     },
 
-    /**
-     * 验证并修复配置值
-     *
-     * 读取配置时调用，如果值无效则重置为默认值并输出警告。
-     * 这确保了即使存储数据被手动篡改或版本升级导致格式变化，
-     * 扩展也不会因无效配置而崩溃。
-     *
-     * @param {string} key - 配置键名
-     * @param {*} value - 配置值
-     * @returns {*} 验证后的值，如果无效则返回默认值
-     * @private
-     */
+    async migrate() {
+      if (!chrome.storage || !chrome.storage.sync) return;
+
+      const current = await new Promise((resolve) => {
+        chrome.storage.sync.get(this.DEFAULTS, resolve);
+      });
+
+      const storedVersion = current.configVersion || 1;
+      const latestVersion = this.DEFAULTS.configVersion;
+
+      if (storedVersion >= latestVersion) return;
+
+      let config = { ...current };
+
+      for (let v = storedVersion + 1; v <= latestVersion; v++) {
+        if (this._migrations[v]) {
+          config = this._migrations[v](config);
+        }
+      }
+
+      config.configVersion = latestVersion;
+      await this.set(config);
+      console.log(`[Vim Web] Config migrated from v${storedVersion} to v${latestVersion}`);
+    },
+
     _validateAndFix(key, value) {
       switch (key) {
         case 'scrollStep':
@@ -399,22 +426,6 @@ window.VimWebUtils = (() => {
       }
     },
 
-    /**
-     * 监听存储变更
-     *
-     * 当其他页面（如 options.js）修改了 chrome.storage.sync 中的数据时，
-     * 会触发回调。回调参数是经过验证的变更值。
-     *
-     * @param {Function} callback - 变更回调函数
-     * @param {Object} callback.changes - 变更后的键值对（已验证）
-     *
-     * @example
-     * StorageManager.onChange((changes) => {
-     *   if (changes.scrollStep) {
-     *     scrollHandler.settings = changes.scrollStep;
-     *   }
-     * });
-     */
     onChange(callback) {
       if (chrome.storage && chrome.storage.onChanged) {
         chrome.storage.onChanged.addListener((changes, area) => {
@@ -422,11 +433,17 @@ window.VimWebUtils = (() => {
             const validated = {};
             for (const [key, change] of Object.entries(changes)) {
               validated[key] = this._validateAndFix(key, change.newValue);
+              this._cache.set(key, validated[key]);
             }
             callback(validated);
           }
         });
       }
+    },
+
+    clearCache() {
+      this._cache.clear();
+      this._cacheInitialized = false;
     }
   };
 
