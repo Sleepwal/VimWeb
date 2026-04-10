@@ -29,6 +29,15 @@ window.VimWebUtils = (() => {
     blacklist(value) {
       if (typeof value !== 'string') return false;
       return value.split('\n').every(line => this.blacklistPattern(line));
+    },
+
+    keyMappings(value) {
+      if (typeof value !== 'object' || value === null) return false;
+      for (const [key, action] of Object.entries(value)) {
+        if (typeof key !== 'string' || typeof action !== 'string') return false;
+        if (key.length === 0 || key.length > 3) return false;
+      }
+      return true;
     }
   };
 
@@ -55,19 +64,72 @@ window.VimWebUtils = (() => {
   };
 
   const ErrorHandler = {
+    _log: [],
+    _MAX_LOG_SIZE: 50,
+
     handle(error, context = {}) {
-      console.error('[Vim Web Error]', error.message || error, context);
+      const entry = {
+        message: error.message || String(error),
+        context,
+        timestamp: Date.now(),
+        stack: error.stack || null
+      };
+
+      this._log.push(entry);
+      if (this._log.length > this._MAX_LOG_SIZE) {
+        this._log.shift();
+      }
+
+      console.error('[Vim Web Error]', entry.message, context);
     },
 
     wrap(fn, context = {}) {
-      return (...args) => {
+      const self = this;
+      return function wrapped(...args) {
         try {
-          return fn(...args);
+          return fn.apply(this, args);
         } catch (error) {
-          this.handle(error, { ...context, function: fn.name });
+          self.handle(error, { ...context, function: fn.name });
           return undefined;
         }
       };
+    },
+
+    wrapAsync(fn, context = {}) {
+      const self = this;
+      return async function wrapped(...args) {
+        try {
+          return await fn.apply(this, args);
+        } catch (error) {
+          self.handle(error, { ...context, function: fn.name });
+          return undefined;
+        }
+      };
+    },
+
+    getLog() {
+      return [...this._log];
+    },
+
+    clearLog() {
+      this._log = [];
+    },
+
+    showUserError(message) {
+      const existing = document.querySelector('.vim-web-error-toast');
+      if (existing) existing.remove();
+
+      const toast = DOMSafe.createElement('div', 'vim-web-error-toast', message);
+      document.body.appendChild(toast);
+
+      requestAnimationFrame(() => {
+        toast.classList.add('show');
+      });
+
+      setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
     }
   };
 
@@ -75,7 +137,8 @@ window.VimWebUtils = (() => {
     DEFAULTS: {
       scrollStep: { value: 15, unit: '%' },
       blacklist: '',
-      configVersion: 1
+      keyMappings: {},
+      configVersion: 2
     },
 
     async get(keys) {
@@ -85,7 +148,7 @@ window.VimWebUtils = (() => {
           if (Array.isArray(keys)) {
             keys.forEach(k => { result[k] = this.DEFAULTS[k]; });
           } else {
-            Object.keys(keys).forEach(k => { result[k] = this.DEFAULTS[k] || keys[k]; });
+            Object.keys(keys).forEach(k => { result[k] = this.DEFAULTS[k] !== undefined ? this.DEFAULTS[k] : keys[k]; });
           }
           resolve(result);
           return;
@@ -128,6 +191,12 @@ window.VimWebUtils = (() => {
           if (!Validators.blacklist(value)) {
             console.warn('[Vim Web] Invalid blacklist config, resetting to default');
             return this.DEFAULTS.blacklist;
+          }
+          return value;
+        case 'keyMappings':
+          if (!Validators.keyMappings(value)) {
+            console.warn('[Vim Web] Invalid keyMappings config, resetting to default');
+            return { ...this.DEFAULTS.keyMappings };
           }
           return value;
         default:
