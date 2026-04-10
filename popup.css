@@ -1,8 +1,10 @@
 body {
   width: 280px;
+  max-height: 500px;
+  overflow-y: auto;
   margin: 0;
   padding: 16px;
-  background-color: #1e1e1e; /* VS Code Dark / Vim Dark */
+  background-color: #1e1e1e;
   color: #d4d4d4;
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
   font-size: 14px;
@@ -25,7 +27,7 @@ header {
 h1 {
   margin: 0;
   font-size: 18px;
-  color: #4ec9b0; /* Mint Green */
+  color: #4ec9b0;
 }
 
 .version {
@@ -36,7 +38,7 @@ h1 {
 h2 {
   margin: 0 0 10px 0;
   font-size: 14px;
-  color: #ce9178; /* Orange/Brown */
+  color: #ce9178;
   text-transform: uppercase;
   letter-spacing: 1px;
 }
@@ -62,7 +64,7 @@ kbd {
   border-radius: 4px;
   padding: 2px 6px;
   font-family: inherit;
-  color: #569cd6; /* Blue */
+  color: #569cd6;
   font-weight: bold;
   min-width: 20px;
   text-align: center;
