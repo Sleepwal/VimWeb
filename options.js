@@ -1,7 +1,6 @@
-const DEFAULT_SETTINGS = {
-  scrollStep: { value: 15, unit: '%' },
-  blacklist: ''
-};
+const Utils = window.VimWebUtils;
+
+const DEFAULT_SETTINGS = Utils.StorageManager.DEFAULTS;
 
 const presetSelect = document.getElementById('preset-select');
 const scrollValueInput = document.getElementById('scroll-value');
@@ -13,27 +12,22 @@ const previewContainer = document.getElementById('preview-container');
 const blacklistInput = document.getElementById('blacklist');
 const blacklistStatus = document.getElementById('blacklist-status');
 
-// 初始化
 document.addEventListener('DOMContentLoaded', restoreOptions);
 
-// 事件监听
 presetSelect.addEventListener('change', handlePresetChange);
 scrollValueInput.addEventListener('input', handleInputChange);
 scrollUnitSelect.addEventListener('change', handleInputChange);
 resetBtn.addEventListener('click', resetOptions);
 
-// 黑名单输入监听
 if (blacklistInput) {
-  blacklistInput.addEventListener('input', debounce(saveBlacklist, 500));
+  blacklistInput.addEventListener('input', Utils.debounce(saveBlacklist, 500));
 }
 
-// 预览区域的简单键盘监听 (模拟 content.js 的行为)
 previewContainer.addEventListener('keydown', (e) => {
   if (e.key === 'j' || e.key === 'k') {
     e.preventDefault();
     const settings = getCurrentSettings();
-    
-    // 计算滚动距离
+
     let pixelY = 0;
     if (settings.scrollStep.unit === '%') {
       pixelY = previewContainer.clientHeight * (settings.scrollStep.value / 100);
@@ -58,20 +52,18 @@ function getCurrentSettings() {
   };
 }
 
-function restoreOptions() {
-  chrome.storage.sync.get(DEFAULT_SETTINGS, (items) => {
-    updateUI(items.scrollStep);
-    if (blacklistInput) {
-      blacklistInput.value = items.blacklist || '';
-    }
-  });
+async function restoreOptions() {
+  const items = await Utils.StorageManager.get(DEFAULT_SETTINGS);
+  updateUI(items.scrollStep);
+  if (blacklistInput) {
+    blacklistInput.value = items.blacklist || '';
+  }
 }
 
 function updateUI(scrollStep) {
   scrollValueInput.value = scrollStep.value;
   scrollUnitSelect.value = scrollStep.unit;
-  
-  // 尝试匹配预设
+
   const currentJson = JSON.stringify(scrollStep);
   let matched = false;
   for (let option of presetSelect.options) {
@@ -84,7 +76,7 @@ function updateUI(scrollStep) {
   if (!matched) {
     presetSelect.value = 'custom';
   }
-  
+
   validateAndSave();
 }
 
@@ -107,7 +99,6 @@ function validateAndSave() {
   const value = parseFloat(scrollValueInput.value);
   const unit = scrollUnitSelect.value;
 
-  // 验证
   let isValid = true;
   let msg = '';
 
@@ -115,12 +106,10 @@ function validateAndSave() {
     isValid = false;
     msg = '请输入有效的正数';
   } else if (unit === '%' && (value < 5 || value > 100)) {
-    // 警告但允许保存 (或者严格限制)
-    // 这里根据需求：10%-200%
     if (value < 5) msg = '警告：滚动幅度过小';
     if (value > 200) msg = '警告：滚动幅度过大';
   } else if (unit === 'px' && value > 5000) {
-      msg = '警告：像素值可能过大';
+    msg = '警告：像素值可能过大';
   }
 
   validationMsg.textContent = msg;
@@ -130,11 +119,10 @@ function validateAndSave() {
   }
 }
 
-function saveOptions() {
+async function saveOptions() {
   const settings = getCurrentSettings();
-  chrome.storage.sync.set(settings, () => {
-    showStatus('已保存');
-  });
+  await Utils.StorageManager.set(settings);
+  showStatus('已保存');
 }
 
 function resetOptions() {
@@ -152,27 +140,24 @@ function showStatus(text) {
   }, 2000);
 }
 
-// 防抖函数
-function debounce(func, wait) {
-  let timeout;
-  return function executedFunction(...args) {
-    const later = () => {
-      clearTimeout(timeout);
-      func(...args);
-    };
-    clearTimeout(timeout);
-    timeout = setTimeout(later, wait);
-  };
-}
-
-// 保存黑名单
-function saveBlacklist() {
+async function saveBlacklist() {
   const blacklist = blacklistInput.value;
-  chrome.storage.sync.set({ blacklist }, () => {
-    blacklistStatus.textContent = '已保存';
+
+  if (!Utils.Validators.blacklist(blacklist)) {
+    blacklistStatus.textContent = '黑名单格式无效，仅允许字母、数字、点号、连字符和通配符 *';
     blacklistStatus.classList.add('show');
+    blacklistStatus.style.color = '#f48771';
     setTimeout(() => {
       blacklistStatus.classList.remove('show');
-    }, 2000);
-  });
+      blacklistStatus.style.color = '';
+    }, 3000);
+    return;
+  }
+
+  await Utils.StorageManager.set({ blacklist });
+  blacklistStatus.textContent = '已保存';
+  blacklistStatus.classList.add('show');
+  setTimeout(() => {
+    blacklistStatus.classList.remove('show');
+  }, 2000);
 }
