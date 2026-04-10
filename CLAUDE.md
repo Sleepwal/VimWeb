@@ -19,7 +19,9 @@ Vim Web is a lightweight Chrome extension (MV3) that provides Vim-style keyboard
 ```
 wim/
 ├── manifest.json       # MV3 extension configuration
-├── content.js          # Core keyboard handling, mode management, blacklist check, mode indicator
+├── background.js       # Service worker: tab management, message handling
+├── utils.js            # Shared utilities: validators, DOMSafe, ErrorHandler, StorageManager
+├── content.js          # Core keyboard handling, mode management, key buffer, scroll handler
 ├── hint.js             # F-mode hint system (exposed as window.VimHint)
 ├── hint.css            # Hint overlay styles
 ├── indicator.css       # Mode indicator styles (NORMAL/INSERT/HINT)
@@ -30,27 +32,52 @@ wim/
 
 ### Architecture
 
-**Mode System**: The extension operates in three modes (defined in `content.js`):
-- `NORMAL`: Default mode for navigation commands (j/k/h/l scrolling, gg/G for top/bottom, f for hint mode, Ctrl+d/u for half-page scroll)
-- `INSERT`: Activated when focused on input/textarea/contenteditable elements; shortcuts are disabled
-- `HINT`: F-mode for keyboard clicking on links/elements via alphabet hints
+**Module System**: Scripts are loaded in order via manifest.json content_scripts. Shared utilities are exposed as `window.VimWebUtils`.
 
-**Key Components**:
-- `content.js`: Event listener with `capture: true` for priority handling; maintains key buffer for multi-key commands (e.g., "gg"); tracks mouse position for Space-click feature; syncs scroll settings from `chrome.storage.sync`; implements blacklist check and mode indicator
-- `hint.js`: Global `VimHint` object creates overlays on clickable elements (a-z, then aa-az labels); filters visible elements by viewport intersection and computed styles
-- `options.js`: Settings UI with live preview; validates scroll step values (5-200% or px); manages blacklist configuration
+**Core Classes** (in content.js):
+- `KeyBuffer`: Manages key input buffer with timeout for multi-key commands (e.g., "gg", "gt")
+- `ScrollHandler`: Handles scroll operations with configurable step settings from chrome.storage
+- `Indicator`: Manages the mode indicator UI element
+- `ModeManager`: Manages NORMAL/INSERT/HINT mode transitions
+- `TabMessenger`: Sends tab action messages to background.js via chrome.runtime.sendMessage
+
+**Background Script** (background.js):
+- Handles tab operations: next/prev tab, close tab, restore closed tab
+- Maintains a stack of recently closed tabs (max 10)
+- Responds to messages from content scripts
+
+**Shared Utilities** (utils.js - window.VimWebUtils):
+- `Validators`: Validates scrollStep, blacklist patterns
+- `DOMSafe`: Safe DOM creation and text setting (prevents XSS)
+- `ErrorHandler`: Centralized error handling with try/catch wrapping
+- `StorageManager`: Async storage access with validation and defaults
+- `matchBlacklist`/`isBlacklisted`: Blacklist matching with input validation
+- `debounce`: Utility debounce function
+
+**Mode System**: The extension operates in three modes:
+- `NORMAL`: Default mode for navigation commands
+- `INSERT`: Activated when focused on input/textarea/contenteditable elements
+- `HINT`: F-mode for keyboard clicking on links/elements
+
+**Key Commands**:
+- Single-key: j/k/h/l (scroll), f (hint), Space (click at cursor), q/Q (back), G (bottom), x (close tab), X (restore tab)
+- Multi-key: gg (top), gt (next tab), gT (prev tab)
+- Ctrl combos: Ctrl+d (half page down), Ctrl+u (half page up)
+- Escape: Exit current mode
 
 **Storage Schema**:
 ```javascript
 {
   scrollStep: { value: number, unit: '%' | 'px' },
-  blacklist: string  // newline-separated domain patterns, supports wildcards (*)
+  blacklist: string,  // newline-separated domain patterns, supports wildcards (*)
+  configVersion: number  // schema version for migration
 }
 ```
-
-**Command Mapping**: Normal mode commands are defined in `normalKeyMap` (single-key) and `multiKeyCommands` (multi-key like "gg") objects for maintainability.
 
 ### Code Style
 - Use vanilla JavaScript (ES6+) with JSDoc comments
 - CSS class prefix: `.vim-web-*` to avoid conflicts with host pages
 - Z-index for overlays: `2147483647` (maximum safe value)
+- Use `window.VimWebUtils` for shared utilities
+- Use `Utils.DOMSafe` for DOM operations in content scripts
+- Validate all user input with `Utils.Validators` before storage
