@@ -70,6 +70,21 @@
       </section>
 
       <section class="setting-group">
+        <h2>快捷键映射</h2>
+        <p class="description">自定义快捷键与命令的映射关系。点击"录制"按钮后按下新快捷键即可重新绑定。</p>
+
+        <div id="key-mappings-list" class="key-mappings-list"></div>
+
+        <div class="actions">
+          <button id="reset-mappings-btn" class="btn secondary">恢复默认映射</button>
+          <button id="export-mappings-btn" class="btn secondary">导出映射</button>
+          <button id="import-mappings-btn" class="btn secondary">导入映射</button>
+          <input type="file" id="import-file" accept=".json" style="display:none">
+          <span id="mappings-status" class="save-status"></span>
+        </div>
+      </section>
+
+      <section class="setting-group">
         <h2>黑名单</h2>
         <p class="description">在以下域名上禁用 Vim Web（每行一个域名，如 gmail.com）。支持通配符 *。</p>
 

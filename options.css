@@ -101,7 +101,7 @@ select:focus, input:focus {
   overflow-y: auto;
   border: 1px dashed #555;
   position: relative;
-  outline: none; /* Focus outline managed by border color change if needed */
+  outline: none;
 }
 
 .scroll-container:focus {
@@ -109,7 +109,7 @@ select:focus, input:focus {
 }
 
 .scroll-content {
-  height: 900px; /* 3x preview height */
+  height: 900px;
   background: linear-gradient(180deg, #1e1e1e 0%, #252526 10%, #1e1e1e 20%, #2d2d2d 100%);
   position: relative;
 }
@@ -160,4 +160,92 @@ select:focus, input:focus {
 
 .save-status.show {
   opacity: 1;
+}
+
+.key-mappings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid #444;
+  border-radius: 4px;
+  padding: 10px;
+  background-color: #1e1e1e;
+}
+
+.key-mapping-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background-color: #2d2d2d;
+}
+
+.key-mapping-key {
+  display: inline-block;
+  min-width: 50px;
+  padding: 2px 8px;
+  background-color: #3c3c3c;
+  border: 1px solid #555;
+  border-radius: 4px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-weight: bold;
+  color: #569cd6;
+  text-align: center;
+  font-size: 13px;
+}
+
+.key-mapping-action {
+  flex: 1;
+  font-size: 13px;
+  color: #cccccc;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.key-mapping-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  background-color: #6c27b0;
+  color: #fff;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: bold;
+}
+
+.key-mapping-btn {
+  padding: 3px 10px !important;
+  font-size: 12px !important;
+  font-weight: normal !important;
+}
+
+.key-mapping-btn.recording {
+  background-color: #d32f2f !important;
+  color: #fff !important;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+textarea {
+  background-color: #3c3c3c;
+  color: #cccccc;
+  border: 1px solid #555;
+  padding: 8px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  width: 100%;
+  resize: vertical;
+}
+
+textarea:focus {
+  border-color: #007fd4;
+  outline: none;
 }
