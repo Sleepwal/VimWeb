@@ -570,6 +570,9 @@
     // 初始化实例
     // ==========================================
 
+    /** @type {Utils.EventManager} 事件管理器实例，统一管理所有事件监听器 */
+    const eventManager = new Utils.EventManager();
+
     /** @type {KeyBuffer} 按键缓冲区实例 */
     const keyBuffer = new KeyBuffer();
     /** @type {ScrollHandler} 滚动处理器实例 */
@@ -586,8 +589,7 @@
     /** @type {number} 鼠标当前 Y 坐标，用于 Space 点击功能 */
     let mouseY = window.innerHeight / 2;
 
-    // 追踪鼠标位置，用于 Space 键点击光标处元素
-    document.addEventListener("mousemove", (e) => {
+    eventManager.register(document, 'mousemove', (e) => {
       mouseX = e.clientX;
       mouseY = e.clientY;
     }, { passive: true });
@@ -796,18 +798,14 @@
      * 焦点事件监听：当焦点进入可编辑元素时，自动切换到 INSERT 模式
      * 使用捕获阶段（true）确保在其他事件处理器之前执行
      */
-    document.addEventListener('focus', (e) => {
+    eventManager.register(document, 'focus', (e) => {
       if (isEditable(e.target)) {
         modeManager.switchTo(modeManager.MODE.INSERT);
         if (window.VimJumper) window.VimJumper.recordLastInput(e.target);
       }
     }, true);
 
-    /**
-     * 失焦事件监听：当焦点离开可编辑元素时，自动切换回 NORMAL 模式
-     * 使用 10ms 延迟避免焦点切换过程中的闪烁
-     */
-    document.addEventListener('blur', () => {
+    eventManager.register(document, 'blur', () => {
       setTimeout(() => {
         if (!isEditable(document.activeElement)) {
           modeManager.switchTo(modeManager.MODE.NORMAL);
@@ -830,10 +828,9 @@
      * 3. 忽略带有 Meta/Ctrl/Alt 修饰键的按键（避免干扰浏览器快捷键）
      * 4. 其他按键交给 handleVimKey 处理
      */
-    document.addEventListener("keydown", (e) => {
+    eventManager.register(document, 'keydown', (e) => {
       if (modeManager.isInsert() && e.key !== 'Escape') return;
 
-      // Ctrl+d：向下半页，Ctrl+u：向上半页
       if (e.ctrlKey && (e.key === 'd' || e.key === 'u')) {
         e.preventDefault();
         if (e.key === 'd') {
@@ -844,7 +841,6 @@
         return;
       }
 
-      // 忽略带有修饰键的按键，避免与浏览器快捷键冲突
       if (e.metaKey || e.ctrlKey || e.altKey) return;
 
       handleVimKey(e);

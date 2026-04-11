@@ -4,11 +4,12 @@
  * 作为全局命名空间 window.VimWebUtils 暴露，供 content.js、hint.js、search.js、options.js 共同使用。
  * 采用 IIFE 封装，避免污染全局作用域。
  *
- * 包含四个核心子模块：
+ * 包含五个核心子模块：
  * - Validators：数据验证器，确保存储数据的完整性和安全性
  * - DOMSafe：DOM 安全操作工具，防止 XSS 攻击
  * - ErrorHandler：集中式错误处理器，提供日志记录和用户提示
  * - StorageManager：异步存储管理器，封装 chrome.storage.sync 并内置数据验证
+ * - EventManager：事件管理器，统一管理事件监听器，支持事件委托和调试
  *
  * 以及三个工具函数：
  * - matchBlacklist：单条黑名单模式匹配
@@ -524,11 +525,133 @@ window.VimWebUtils = (() => {
     };
   }
 
+  /**
+   * 事件管理器
+   *
+   * 统一管理所有事件监听器，提供：
+   * - 集中注册/注销，防止内存泄漏
+   * - 事件委托机制，减少监听器数量
+   * - 调试工具，查看所有已注册的监听器
+   *
+   * @example
+   * const em = new EventManager();
+   * em.register(document, 'keydown', handler, { capture: true });
+   * em.delegate(document.body, 'click', '.vim-web-hint', onClick);
+   * em.removeAll();
+   */
+  class EventManager {
+    constructor() {
+      /** @type {Array<{target: EventTarget, type: string, handler: Function, options: Object}>} 已注册的监听器列表 */
+      this._listeners = [];
+      /** @type {Array<{root: EventTarget, type: string, selector: string, handler: Function, wrapper: Function}>} 已注册的委托监听器列表 */
+      this._delegated = [];
+    }
+
+    /**
+     * 注册事件监听器
+     *
+     * @param {EventTarget} target - 事件目标（如 document、window）
+     * @param {string} type - 事件类型（如 'keydown'、'click'）
+     * @param {Function} handler - 事件处理函数
+     * @param {Object} [options={}] - addEventListener 选项
+     * @param {boolean} [options.capture=false] - 是否在捕获阶段触发
+     * @param {boolean} [options.passive=false] - 是否为被动监听器
+     * @returns {Function} 注销函数，调用后移除此监听器
+     */
+    register(target, type, handler, options = {}) {
+      target.addEventListener(type, handler, options);
+      const entry = { target, type, handler, options };
+      this._listeners.push(entry);
+
+      return () => {
+        target.removeEventListener(type, handler, options);
+        const idx = this._listeners.indexOf(entry);
+        if (idx !== -1) this._listeners.splice(idx, 1);
+      };
+    }
+
+    /**
+     * 注册事件委托监听器
+     *
+     * 在根元素上监听事件，当事件源匹配选择器时触发处理函数。
+     * 适用于动态创建的元素，无需为每个元素单独绑定监听器。
+     *
+     * @param {EventTarget} root - 委托根元素（如 document.body）
+     * @param {string} type - 事件类型
+     * @param {string} selector - CSS 选择器，匹配事件源
+     * @param {Function} handler - 事件处理函数，接收 (event, matchedElement) 参数
+     * @returns {Function} 注销函数
+     */
+    delegate(root, type, selector, handler) {
+      const wrapper = (e) => {
+        const matched = e.target.closest(selector);
+        if (matched) {
+          handler(e, matched);
+        }
+      };
+
+      root.addEventListener(type, wrapper);
+      const entry = { root, type, selector, handler, wrapper };
+      this._delegated.push(entry);
+
+      return () => {
+        root.removeEventListener(type, wrapper);
+        const idx = this._delegated.indexOf(entry);
+        if (idx !== -1) this._delegated.splice(idx, 1);
+      };
+    }
+
+    /**
+     * 移除所有已注册的监听器
+     *
+     * 包括普通监听器和委托监听器。
+     * 通常在扩展卸载或页面清理时调用。
+     */
+    removeAll() {
+      for (const { target, type, handler, options } of this._listeners) {
+        target.removeEventListener(type, handler, options);
+      }
+      this._listeners = [];
+
+      for (const { root, type, wrapper } of this._delegated) {
+        root.removeEventListener(type, wrapper);
+      }
+      this._delegated = [];
+    }
+
+    /**
+     * 获取已注册监听器的数量
+     * @returns {{direct: number, delegated: number}} 监听器数量统计
+     */
+    getStats() {
+      return {
+        direct: this._listeners.length,
+        delegated: this._delegated.length
+      };
+    }
+
+    /**
+     * 获取所有已注册监听器的描述信息（调试用）
+     * @returns {Array<string>} 监听器描述列表
+     */
+    debug() {
+      const info = [];
+      for (const { type, options } of this._listeners) {
+        info.push(`[direct] ${type} capture=${!!options.capture}`);
+      }
+      for (const { type, selector } of this._delegated) {
+        info.push(`[delegate] ${type} -> ${selector}`);
+      }
+      return info;
+    }
+  }
+
   return {
     Validators,
     DOMSafe,
     ErrorHandler,
     StorageManager,
+    EventManager,
     matchBlacklist,
     isBlacklisted,
     debounce
