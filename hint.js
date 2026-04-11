@@ -142,7 +142,7 @@ const VimHint = {
     while (walker.nextNode()) {
       const el = walker.currentNode;
 
-      if (!Utils.isVisible(el, { checkViewport: true })) continue;
+      if (!window.VimWebUtils.isVisible(el, { checkViewport: true })) continue;
 
       results.push(el);
     }
