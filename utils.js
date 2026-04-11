@@ -284,7 +284,9 @@ window.VimWebUtils = (() => {
       scrollStep: { value: 15, unit: '%' },
       blacklist: '',
       keyMappings: {},
-      configVersion: 3
+      inputSelectors: '',
+      linkSelectors: '',
+      configVersion: 4
     },
 
     /** @type {Map<string, *>} 内存缓存，避免频繁读取 chrome.storage */
@@ -310,6 +312,11 @@ window.VimWebUtils = (() => {
         return config;
       },
       3: (config) => {
+        return config;
+      },
+      4: (config) => {
+        if (!config.inputSelectors) config.inputSelectors = '';
+        if (!config.linkSelectors) config.linkSelectors = '';
         return config;
       }
     },

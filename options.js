@@ -52,6 +52,12 @@ const importMappingsBtn = document.getElementById('import-mappings-btn');
 const importFile = document.getElementById('import-file');
 /** @type {HTMLElement} 映射操作状态提示 */
 const mappingsStatus = document.getElementById('mappings-status');
+/** @type {HTMLTextAreaElement} 输入框选择器文本域 */
+const inputSelectorsInput = document.getElementById('input-selectors');
+/** @type {HTMLTextAreaElement} 链接选择器文本域 */
+const linkSelectorsInput = document.getElementById('link-selectors');
+/** @type {HTMLElement} 选择器保存状态提示 */
+const selectorsStatus = document.getElementById('selectors-status');
 
 /**
  * 命令名到中文显示名的映射
@@ -214,6 +220,13 @@ if (importFile) {
   importFile.addEventListener('change', importKeyMappings);
 }
 
+if (inputSelectorsInput) {
+  inputSelectorsInput.addEventListener('input', Utils.debounce(saveSelectors, 500));
+}
+if (linkSelectorsInput) {
+  linkSelectorsInput.addEventListener('input', Utils.debounce(saveSelectors, 500));
+}
+
 /**
  * 滚动预览区域的键盘事件处理
  *
@@ -264,6 +277,12 @@ async function restoreOptions() {
   updateUI(items.scrollStep);
   if (blacklistInput) {
     blacklistInput.value = items.blacklist || '';
+  }
+  if (inputSelectorsInput) {
+    inputSelectorsInput.value = items.inputSelectors || '';
+  }
+  if (linkSelectorsInput) {
+    linkSelectorsInput.value = items.linkSelectors || '';
   }
 }
 
@@ -417,6 +436,25 @@ async function saveBlacklist() {
   setTimeout(() => {
     blacklistStatus.classList.remove('show');
   }, 2000);
+}
+
+// ==========================================
+// 自定义元素选择器
+// ==========================================
+
+/**
+ * 保存自定义选择器到存储
+ *
+ * 将输入框选择器和链接选择器保存到 chrome.storage.sync。
+ * 每行一个选择器，空行会被忽略。
+ * 使用 500ms 防抖，避免频繁保存。
+ */
+async function saveSelectors() {
+  const inputSelectors = inputSelectorsInput ? inputSelectorsInput.value : '';
+  const linkSelectors = linkSelectorsInput ? linkSelectorsInput.value : '';
+
+  await Utils.StorageManager.set({ inputSelectors, linkSelectors });
+  showStatus('已保存', selectorsStatus);
 }
 
 // ==========================================

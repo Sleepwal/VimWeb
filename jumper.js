@@ -20,12 +20,84 @@ const VimJumper = {
   /** @type {HTMLElement|null} 上一个聚焦的输入框 */
   lastInput: null,
 
+  /** @type {string} 自定义输入框选择器（从存储加载） */
+  _customInputSelectors: '',
+  /** @type {string} 自定义链接选择器（从存储加载） */
+  _customLinkSelectors: '',
+  /** @type {boolean} 是否已初始化选择器配置 */
+  _selectorsInitialized: false,
+
+  /**
+   * 初始化自定义选择器配置
+   *
+   * 从 chrome.storage.sync 读取用户配置的选择器，
+   * 并监听变更实时更新。
+   * @private
+   */
+  async _initSelectors() {
+    if (this._selectorsInitialized) return;
+
+    const Utils = window.VimWebUtils;
+    const items = await Utils.StorageManager.get(['inputSelectors', 'linkSelectors']);
+    this._customInputSelectors = items.inputSelectors || '';
+    this._customLinkSelectors = items.linkSelectors || '';
+    this._selectorsInitialized = true;
+
+    Utils.StorageManager.onChange((changes) => {
+      if (changes.inputSelectors !== undefined) {
+        this._customInputSelectors = changes.inputSelectors;
+      }
+      if (changes.linkSelectors !== undefined) {
+        this._customLinkSelectors = changes.linkSelectors;
+      }
+    });
+  },
+
+  /**
+   * 获取输入框 CSS 选择器
+   *
+   * 合并默认选择器和用户自定义选择器。
+   * @returns {string} CSS 选择器字符串
+   * @private
+   */
+  _getInputSelector() {
+    const defaultSelector = 'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]), textarea, select, [contenteditable="true"]';
+    if (!this._customInputSelectors) return defaultSelector;
+
+    const custom = this._customInputSelectors.split('\n')
+      .map(s => s.trim())
+      .filter(s => s.length > 0)
+      .join(', ');
+
+    return custom ? `${defaultSelector}, ${custom}` : defaultSelector;
+  },
+
+  /**
+   * 获取链接 CSS 选择器
+   *
+   * 合并默认选择器和用户自定义选择器。
+   * @returns {string} CSS 选择器字符串
+   * @private
+   */
+  _getLinkSelector() {
+    const defaultSelector = 'a[href]';
+    if (!this._customLinkSelectors) return defaultSelector;
+
+    const custom = this._customLinkSelectors.split('\n')
+      .map(s => s.trim())
+      .filter(s => s.length > 0)
+      .join(', ');
+
+    return custom ? `${defaultSelector}, ${custom}` : defaultSelector;
+  },
+
   /**
    * 跳转到上一个聚焦的输入框
    *
    * 如果没有记录过上次聚焦的输入框，则跳转到页面第一个输入框。
    */
   jumpToLastInput() {
+    this._initSelectors();
     if (this.lastInput && document.contains(this.lastInput)) {
       this.lastInput.focus();
       this._scrollToElement(this.lastInput);
@@ -76,9 +148,7 @@ const VimJumper = {
    * @private
    */
   _findFirstVisibleInput() {
-    const inputs = document.querySelectorAll(
-      'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]), textarea, select, [contenteditable="true"]'
-    );
+    const inputs = document.querySelectorAll(this._getInputSelector());
 
     for (const input of inputs) {
       if (this._isVisible(input)) {
@@ -113,7 +183,7 @@ const VimJumper = {
     }
 
     // 策略2：链接文本
-    const allLinks = document.querySelectorAll('a[href]');
+    const allLinks = document.querySelectorAll(this._getLinkSelector());
     for (const link of allLinks) {
       if (!this._isVisible(link)) continue;
 

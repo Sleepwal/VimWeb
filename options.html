@@ -107,6 +107,27 @@ notion.so
 
         <div id="blacklist-status" class="save-status"></div>
       </section>
+
+      <section class="setting-group">
+        <h2>自定义元素选择器</h2>
+        <p class="description">配置 gi/gI（输入框跳转）和 ]]/[[（链接跳转）使用的 CSS 选择器。每行一个选择器，留空使用默认值。</p>
+
+        <div class="control-row">
+          <label for="input-selectors">输入框选择器：</label>
+          <textarea id="input-selectors" rows="3" placeholder="例如：
+input[type="search"]
+[contenteditable]"></textarea>
+        </div>
+
+        <div class="control-row">
+          <label for="link-selectors">链接选择器：</label>
+          <textarea id="link-selectors" rows="3" placeholder="例如：
+a[href]
+button.next"></textarea>
+        </div>
+
+        <div id="selectors-status" class="save-status"></div>
+      </section>
     </main>
   </div>
   <script src="utils.js"></script>
