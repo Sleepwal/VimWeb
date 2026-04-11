@@ -80,40 +80,31 @@ const VimBookmarks = {
     this._list.open();
   },
 
-  async _getBookmarks() {
-    if (!chrome.bookmarks) return [];
-
-    const tree = await chrome.bookmarks.getTree();
-    const results = [];
-
-    function walk(nodes) {
-      for (const node of nodes) {
-        if (node.url) {
-          results.push({ title: node.title || node.url, url: node.url });
-        }
-        if (node.children) {
-          walk(node.children);
-        }
+  async _sendAction(action) {
+    return new Promise((resolve) => {
+      if (!chrome.runtime || !chrome.runtime.sendMessage) {
+        resolve({ success: false });
+        return;
       }
-    }
+      chrome.runtime.sendMessage({ type: 'tabAction', action }, (resp) => {
+        if (chrome.runtime.lastError) {
+          console.warn('[Vim Web] Action error:', chrome.runtime.lastError.message);
+          resolve({ success: false });
+          return;
+        }
+        resolve(resp || { success: false });
+      });
+    });
+  },
 
-    walk(tree);
-    return results;
+  async _getBookmarks() {
+    const response = await this._sendAction('getBookmarks');
+    return response.success ? response.bookmarks : [];
   },
 
   async _getHistory() {
-    if (!chrome.history) return [];
-
-    const items = await chrome.history.search({
-      text: '',
-      maxResults: 200,
-      startTime: Date.now() - 7 * 24 * 60 * 60 * 1000
-    });
-
-    return items.map(item => ({
-      title: item.title || item.url,
-      url: item.url
-    }));
+    const response = await this._sendAction('getHistory');
+    return response.success ? response.history : [];
   }
 };
 

@@ -96,7 +96,7 @@ chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type !== 'tabAction') return false;
 
-  handleTabAction(message.action, sender)
+  handleTabAction(message.action, sender, message)
     .then(sendResponse)
     .catch(error => {
       console.error('[Vim Web BG] Tab action error:', error);
@@ -113,7 +113,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
  * @param {chrome.runtime.MessageSender} sender - 消息发送者信息
  * @returns {Promise<{success: boolean, error?: string}>} 操作结果
  */
-async function handleTabAction(action, sender) {
+async function handleTabAction(action, sender, message) {
   switch (action) {
     case 'nextTab':
       return switchTab('next', sender);
@@ -127,6 +127,10 @@ async function handleTabAction(action, sender) {
       return getTabList();
     case 'switchToTab':
       return switchToTab(message.tabId);
+    case 'getBookmarks':
+      return getBookmarks();
+    case 'getHistory':
+      return getHistory();
     default:
       return { success: false, error: `Unknown action: ${action}` };
   }
@@ -260,6 +264,64 @@ async function switchToTab(tabId) {
     if (!tabId) return { success: false, error: 'No tabId provided' };
     await chrome.tabs.update(tabId, { active: true });
     return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 获取所有书签
+ *
+ * 递归遍历书签树，提取所有有 URL 的书签节点。
+ * 仅在 background script 中可用（chrome.bookmarks API 限制）。
+ *
+ * @returns {Promise<{success: boolean, bookmarks?: Array}>} 书签列表
+ */
+async function getBookmarks() {
+  try {
+    const tree = await chrome.bookmarks.getTree();
+    const results = [];
+
+    function walk(nodes) {
+      for (const node of nodes) {
+        if (node.url) {
+          results.push({ title: node.title || node.url, url: node.url });
+        }
+        if (node.children) {
+          walk(node.children);
+        }
+      }
+    }
+
+    walk(tree);
+    return { success: true, bookmarks: results };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 获取最近 7 天的浏览历史
+ *
+ * 仅在 background script 中可用（chrome.history API 限制）。
+ *
+ * @returns {Promise<{success: boolean, history?: Array}>} 历史记录列表
+ */
+async function getHistory() {
+  try {
+    const items = await chrome.history.search({
+      text: '',
+      maxResults: 200,
+      startTime: Date.now() - 7 * 24 * 60 * 60 * 1000
+    });
+
+    return {
+      success: true,
+      history: items.map(item => ({
+        title: item.title || item.url,
+        url: item.url
+      }))
+    };
   } catch (error) {
     return { success: false, error: error.message };
   }
