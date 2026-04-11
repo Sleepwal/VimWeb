@@ -12,7 +12,7 @@
  * 依赖：window.VimWebUtils（DOMSafe、debounce、SelectableList）
  * 权限：chrome.bookmarks, chrome.history
  */
-class VimBookmarksImpl extends Utils.SelectableList {
+class VimBookmarksImpl extends window.VimWebUtils.SelectableList {
   constructor() {
     super({ title: '书签', placeholder: '搜索...', maxItems: 50, emptyText: '无结果' });
     /** @type {'bookmarks'|'history'} 当前模式 */

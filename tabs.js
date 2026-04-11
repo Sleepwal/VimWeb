@@ -12,7 +12,7 @@
  * 依赖：window.VimWebUtils（DOMSafe、debounce、SelectableList）
  * 权限：chrome.tabs（通过 background.js 中转）
  */
-class VimTabsImpl extends Utils.SelectableList {
+class VimTabsImpl extends window.VimWebUtils.SelectableList {
   constructor() {
     super({ title: '标签页', placeholder: '搜索标签页...', maxItems: Infinity, emptyText: '无匹配标签页' });
   }
