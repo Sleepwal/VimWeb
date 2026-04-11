@@ -1,0 +1,9 @@
+.vim-web-tabs-active .vim-web-list-item-title {
+  color: #4ec9b0;
+  font-weight: bold;
+}
+
+.vim-web-tabs-active .vim-web-list-item-url {
+  color: #4ec9b0;
+  opacity: 0.7;
+}

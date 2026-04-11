@@ -19,8 +19,8 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["utils.js", "hint.js", "search.js", "bookmarks.js", "jumper.js", "content.js"],
-      "css": ["hint.css", "indicator.css", "search.css", "bookmarks.css"],
+      "js": ["utils.js", "hint.js", "search.js", "bookmarks.js", "tabs.js", "jumper.js", "content.js"],
+      "css": ["hint.css", "indicator.css", "search.css", "bookmarks.css", "tabs.css"],
       "run_at": "document_idle"
     }
   ]

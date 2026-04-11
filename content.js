@@ -460,6 +460,7 @@
           '*': 'searchWordUnderCursor',
           'B': 'openBookmarks',
           'H': 'openHistory',
+          'b': 'showTabList',
           'gi': 'jumpToLastInput',
           'gI': 'jumpToFirstInput',
           ']]': 'jumpToNextLink',
@@ -684,6 +685,10 @@
         if (window.VimBookmarks) window.VimBookmarks.openHistory();
         return false;
       },
+      showTabList: () => {
+        if (window.VimTabs) window.VimTabs.open();
+        return false;
+      },
       jumpToLastInput: () => {
         if (window.VimJumper) window.VimJumper.jumpToLastInput();
         return false;
@@ -736,6 +741,8 @@
           modeManager.switchTo(modeManager.MODE.NORMAL);
         } else if (window.VimBookmarks && window.VimBookmarks.isActive) {
           window.VimBookmarks.close();
+        } else if (window.VimTabs && window.VimTabs.isActive) {
+          window.VimTabs.close();
         } else if (modeManager.isInsert()) {
           if (document.activeElement) document.activeElement.blur();
           modeManager.switchTo(modeManager.MODE.NORMAL);

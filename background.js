@@ -123,6 +123,10 @@ async function handleTabAction(action, sender) {
       return closeCurrentTab(sender);
     case 'restoreLastTab':
       return restoreLastTab();
+    case 'getTabList':
+      return getTabList();
+    case 'switchToTab':
+      return switchToTab(message.tabId);
     default:
       return { success: false, error: `Unknown action: ${action}` };
   }
@@ -215,6 +219,47 @@ async function restoreLastTab() {
     }
 
     return { success: false, error: 'No URL for closed tab' };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 获取当前窗口所有标签页列表
+ *
+ * 返回标签页的 id、标题、URL 和激活状态，
+ * 用于 content script 中的标签页列表 UI。
+ *
+ * @returns {Promise<{success: boolean, tabs?: Array}>} 标签页列表
+ */
+async function getTabList() {
+  try {
+    const tabs = await chrome.tabs.query({ currentWindow: true });
+    return {
+      success: true,
+      tabs: tabs.map(t => ({
+        id: t.id,
+        title: t.title || t.url,
+        url: t.url,
+        active: t.active
+      }))
+    };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 切换到指定标签页
+ *
+ * @param {number} tabId - 目标标签页 ID
+ * @returns {Promise<{success: boolean}>} 操作结果
+ */
+async function switchToTab(tabId) {
+  try {
+    if (!tabId) return { success: false, error: 'No tabId provided' };
+    await chrome.tabs.update(tabId, { active: true });
+    return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
   }
