@@ -653,12 +653,298 @@ window.VimWebUtils = (() => {
     }
   }
 
+  /**
+   * 检查元素是否在页面中可见
+   *
+   * 综合检查元素尺寸、视口位置和 CSS 显示状态。
+   * 供 hint.js、jumper.js 等多个模块共享，避免各自重复实现。
+   *
+   * @param {HTMLElement} el - 要检查的 DOM 元素
+   * @param {Object} [options={}] - 检查选项
+   * @param {boolean} [options.checkViewport=false] - 是否检查元素是否在视口内
+   * @returns {boolean} 元素是否可见
+   */
+  function isVisible(el, options = {}) {
+    if (!el) return false;
+
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) return false;
+
+    if (options.checkViewport) {
+      if (rect.bottom < 0 || rect.top > window.innerHeight) return false;
+      if (rect.right < 0 || rect.left > window.innerWidth) return false;
+    }
+
+    const style = window.getComputedStyle(el);
+    if (style.visibility === 'hidden' || style.display === 'none' || style.opacity === '0') return false;
+
+    return true;
+  }
+
+  /**
+   * 可选择列表 UI 基类
+   *
+   * 为 bookmarks.js 和 tabs.js 提供共享的列表 UI 逻辑：
+   * - 创建模态列表（overlay + container + header + input + list）
+   * - 搜索过滤（防抖）
+   * - 键盘导航（j/k/Enter/Esc）
+   * - 鼠标交互（点击、悬停）
+   * - 选中项高亮和滚动
+   *
+   * 子类需要实现：
+   * - _loadData()：加载数据并设置 this.items
+   * - _onSelect(item)：选中项的回调
+   * - _renderItem(item, index, row)：自定义渲染单个列表项
+   *
+   * @example
+   * const list = new SelectableList({ title: '标签页', placeholder: '搜索...' });
+   * list.items = [{ title: 'Google', url: 'https://google.com' }];
+   * list.open();
+   */
+  class SelectableList {
+    /**
+     * @param {Object} config - 配置
+     * @param {string} config.title - 列表标题
+     * @param {string} [config.placeholder='搜索...'] - 搜索框占位文本
+     * @param {number} [config.maxItems=50] - 最大显示项数
+     * @param {string} [config.emptyText='无结果'] - 空列表提示文本
+     */
+    constructor(config = {}) {
+      /** @type {string} 列表标题 */
+      this.title = config.title || '列表';
+      /** @type {string} 搜索框占位文本 */
+      this.placeholder = config.placeholder || '搜索...';
+      /** @type {number} 最大显示项数 */
+      this.maxItems = config.maxItems || 50;
+      /** @type {string} 空列表提示文本 */
+      this.emptyText = config.emptyText || '无结果';
+
+      /** @type {Array} 全部数据项 */
+      this.items = [];
+      /** @type {Array} 过滤后的数据项 */
+      this.filteredItems = [];
+      /** @type {number} 当前选中项索引 */
+      this.selectedIndex = 0;
+      /** @type {boolean} 列表是否处于活动状态 */
+      this.isActive = false;
+
+      this._container = null;
+      this._overlay = null;
+      this._input = null;
+      this._listEl = null;
+    }
+
+    /**
+     * 打开列表
+     */
+    open() {
+      if (this.isActive) {
+        this.close();
+        return;
+      }
+      this.isActive = true;
+      this.selectedIndex = 0;
+      this._createUI();
+      this._loadData();
+    }
+
+    /**
+     * 关闭列表
+     */
+    close() {
+      this.isActive = false;
+      if (this._container) { this._container.remove(); this._container = null; }
+      if (this._overlay) { this._overlay.remove(); this._overlay = null; }
+      this.items = [];
+      this.filteredItems = [];
+      this._input = null;
+      this._listEl = null;
+    }
+
+    /**
+     * 创建列表 UI
+     * @private
+     */
+    _createUI() {
+      this._overlay = DOMSafe.createElement('div', 'vim-web-list-overlay');
+      this._overlay.addEventListener('click', () => this.close());
+
+      this._container = DOMSafe.createElement('div', 'vim-web-list-container');
+
+      const header = DOMSafe.createElement('div', 'vim-web-list-header', this.title);
+
+      this._input = document.createElement('input');
+      this._input.className = 'vim-web-list-input';
+      this._input.type = 'text';
+      this._input.placeholder = this.placeholder;
+      this._input.setAttribute('autocomplete', 'off');
+      this._input.setAttribute('spellcheck', 'false');
+
+      this._listEl = DOMSafe.createElement('div', 'vim-web-list-items');
+
+      this._container.appendChild(header);
+      this._container.appendChild(this._input);
+      this._container.appendChild(this._listEl);
+
+      document.body.appendChild(this._overlay);
+      document.body.appendChild(this._container);
+
+      this._input.addEventListener('input', debounce(() => {
+        this._filter(this._input.value);
+      }, 150));
+
+      this._input.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
+          this.close();
+        } else if (e.key === 'ArrowDown' || e.key === 'j') {
+          e.preventDefault();
+          this._selectNext();
+        } else if (e.key === 'ArrowUp' || e.key === 'k') {
+          e.preventDefault();
+          this._selectPrev();
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          this._onSelect(this.filteredItems[this.selectedIndex]);
+        }
+      });
+
+      this._input.focus();
+    }
+
+    /**
+     * 过滤列表项
+     * @param {string} query - 搜索关键词
+     * @private
+     */
+    _filter(query) {
+      if (!query) {
+        this.filteredItems = this.items.slice(0, this.maxItems);
+      } else {
+        const q = query.toLowerCase();
+        this.filteredItems = this.items.filter(item =>
+          (item.title || '').toLowerCase().includes(q) ||
+          (item.url || '').toLowerCase().includes(q)
+        ).slice(0, this.maxItems);
+      }
+
+      this._updateSelectedIndex();
+      this._renderList();
+    }
+
+    /**
+     * 更新选中索引（子类可覆盖）
+     * @private
+     */
+    _updateSelectedIndex() {
+      this.selectedIndex = 0;
+    }
+
+    /**
+     * 渲染列表
+     * @private
+     */
+    _renderList() {
+      if (!this._listEl) return;
+      this._listEl.innerHTML = '';
+
+      if (this.filteredItems.length === 0) {
+        this._listEl.appendChild(DOMSafe.createElement('div', 'vim-web-list-empty', this.emptyText));
+        return;
+      }
+
+      this.filteredItems.forEach((item, index) => {
+        const row = document.createElement('div');
+        row.className = 'vim-web-list-item' + (index === this.selectedIndex ? ' selected' : '');
+        row.dataset.index = index;
+
+        this._renderItem(item, index, row);
+
+        row.addEventListener('click', () => {
+          this.selectedIndex = index;
+          this._onSelect(item);
+        });
+
+        row.addEventListener('mouseenter', () => {
+          this.selectedIndex = index;
+          this._updateSelection();
+        });
+
+        this._listEl.appendChild(row);
+      });
+    }
+
+    /**
+     * 渲染单个列表项（子类可覆盖以自定义渲染）
+     *
+     * @param {Object} item - 数据项
+     * @param {number} index - 索引
+     * @param {HTMLElement} row - 行容器
+     */
+    _renderItem(item, index, row) {
+      const title = document.createElement('span');
+      title.className = 'vim-web-list-item-title';
+      title.textContent = item.title || '';
+
+      const url = document.createElement('span');
+      url.className = 'vim-web-list-item-url';
+      url.textContent = item.url || '';
+
+      row.appendChild(title);
+      row.appendChild(url);
+    }
+
+    _selectNext() {
+      if (this.filteredItems.length === 0) return;
+      this.selectedIndex = (this.selectedIndex + 1) % this.filteredItems.length;
+      this._updateSelection();
+    }
+
+    _selectPrev() {
+      if (this.filteredItems.length === 0) return;
+      this.selectedIndex = (this.selectedIndex - 1 + this.filteredItems.length) % this.filteredItems.length;
+      this._updateSelection();
+    }
+
+    _updateSelection() {
+      if (!this._listEl) return;
+      const rows = this._listEl.querySelectorAll('.vim-web-list-item');
+      rows.forEach((row, i) => {
+        row.classList.toggle('selected', i === this.selectedIndex);
+      });
+
+      const selected = rows[this.selectedIndex];
+      if (selected) {
+        selected.scrollIntoView({ block: 'nearest' });
+      }
+    }
+
+    /**
+     * 加载数据（子类必须实现）
+     * @abstract
+     * @private
+     */
+    async _loadData() {
+      this._filter('');
+    }
+
+    /**
+     * 选中项回调（子类必须实现）
+     * @abstract
+     * @private
+     */
+    _onSelect(item) {}
+  }
+
   return {
     Validators,
     DOMSafe,
     ErrorHandler,
     StorageManager,
     EventManager,
+    isVisible,
+    SelectableList,
     matchBlacklist,
     isBlacklisted,
     debounce

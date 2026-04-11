@@ -208,13 +208,7 @@ const VimJumper = {
    * @private
    */
   _isVisible(el) {
-    const rect = el.getBoundingClientRect();
-    if (rect.width === 0 && rect.height === 0) return false;
-
-    const style = window.getComputedStyle(el);
-    if (style.visibility === 'hidden' || style.display === 'none' || style.opacity === '0') return false;
-
-    return true;
+    return window.VimWebUtils.isVisible(el);
   },
 
   /**

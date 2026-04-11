@@ -500,16 +500,6 @@
       }
 
       /**
-       * 获取按键对应的命令名（与 getAction 相同，保留用于兼容）
-       * @param {string} key - 按键字符
-       * @returns {string|undefined} 命令名
-       */
-      getActionForKey(key) {
-        const action = this.getAction(key);
-        return action;
-      }
-
-      /**
        * 获取所有映射的合并结果（用户映射覆盖默认映射）
        * @returns {Object<string, string>} 合并后的映射
        */
@@ -637,74 +627,42 @@
      * 命令名到执行函数的映射
      *
      * 每个命令函数执行对应操作，返回值含义：
-     * - false（默认）：不清空按键缓冲区
-     * - true：清空按键缓冲区（用于 G 等单键命令后不需要等待多键序列的情况）
+     * - undefined/false：不清空按键缓冲区（默认）
+     * - true：清空按键缓冲区
      *
      * @type {Object<string, Function>}
      */
     const commandActions = {
-      scrollDown: () => { scrollHandler.perform(1, 0); return false; },
-      scrollUp: () => { scrollHandler.perform(-1, 0); return false; },
-      scrollLeft: () => { scrollHandler.perform(0, -1); return false; },
-      scrollRight: () => { scrollHandler.perform(0, 1); return false; },
-      scrollToTop: () => { scrollHandler.toTop(); },
+      scrollDown: () => scrollHandler.perform(1, 0),
+      scrollUp: () => scrollHandler.perform(-1, 0),
+      scrollLeft: () => scrollHandler.perform(0, -1),
+      scrollRight: () => scrollHandler.perform(0, 1),
+      scrollToTop: () => scrollHandler.toTop(),
       scrollToBottom: () => { scrollHandler.toBottom(); return true; },
       enterHintMode: () => {
         modeManager.switchTo(modeManager.MODE.HINT);
         if (window.VimHint) window.VimHint.createHints();
-        return false;
       },
-      clickAtCursor: () => { clickAtCursor(); return false; },
-      goBack: () => { window.history.back(); return false; },
-      closeTab: () => { TabMessenger.send('closeCurrentTab'); return false; },
-      restoreTab: () => { TabMessenger.send('restoreLastTab'); return false; },
-      nextTab: () => { TabMessenger.send('nextTab'); },
-      prevTab: () => { TabMessenger.send('prevTab'); },
+      clickAtCursor: () => clickAtCursor(),
+      goBack: () => window.history.back(),
+      closeTab: () => TabMessenger.send('closeCurrentTab'),
+      restoreTab: () => TabMessenger.send('restoreLastTab'),
+      nextTab: () => TabMessenger.send('nextTab'),
+      prevTab: () => TabMessenger.send('prevTab'),
       openSearch: () => {
         modeManager.switchTo(modeManager.MODE.SEARCH);
         if (window.VimSearch) window.VimSearch.open();
-        return false;
       },
-      searchNext: () => {
-        if (window.VimSearch) window.VimSearch.next();
-        return false;
-      },
-      searchPrev: () => {
-        if (window.VimSearch) window.VimSearch.prev();
-        return false;
-      },
-      searchWordUnderCursor: () => {
-        if (window.VimSearch) window.VimSearch.searchWordUnderCursor();
-        return false;
-      },
-      openBookmarks: () => {
-        if (window.VimBookmarks) window.VimBookmarks.openBookmarks();
-        return false;
-      },
-      openHistory: () => {
-        if (window.VimBookmarks) window.VimBookmarks.openHistory();
-        return false;
-      },
-      showTabList: () => {
-        if (window.VimTabs) window.VimTabs.open();
-        return false;
-      },
-      jumpToLastInput: () => {
-        if (window.VimJumper) window.VimJumper.jumpToLastInput();
-        return false;
-      },
-      jumpToFirstInput: () => {
-        if (window.VimJumper) window.VimJumper.jumpToFirstInput();
-        return false;
-      },
-      jumpToNextLink: () => {
-        if (window.VimJumper) window.VimJumper.jumpToNextLink();
-        return false;
-      },
-      jumpToPrevLink: () => {
-        if (window.VimJumper) window.VimJumper.jumpToPrevLink();
-        return false;
-      }
+      searchNext: () => { if (window.VimSearch) window.VimSearch.next(); },
+      searchPrev: () => { if (window.VimSearch) window.VimSearch.prev(); },
+      searchWordUnderCursor: () => { if (window.VimSearch) window.VimSearch.searchWordUnderCursor(); },
+      openBookmarks: () => { if (window.VimBookmarks) window.VimBookmarks.openBookmarks(); },
+      openHistory: () => { if (window.VimBookmarks) window.VimBookmarks.openHistory(); },
+      showTabList: () => { if (window.VimTabs) window.VimTabs.open(); },
+      jumpToLastInput: () => { if (window.VimJumper) window.VimJumper.jumpToLastInput(); },
+      jumpToFirstInput: () => { if (window.VimJumper) window.VimJumper.jumpToFirstInput(); },
+      jumpToNextLink: () => { if (window.VimJumper) window.VimJumper.jumpToNextLink(); },
+      jumpToPrevLink: () => { if (window.VimJumper) window.VimJumper.jumpToPrevLink(); }
     };
 
     // ==========================================
@@ -777,7 +735,7 @@
       }
 
       // NORMAL 模式：先尝试单键命令
-      const action = keyMapper.getActionForKey(key);
+      const action = keyMapper.getAction(key);
       if (action && commandActions[action]) {
         e.preventDefault();
         const result = commandActions[action]();
@@ -788,7 +746,7 @@
       // 追加到缓冲区，尝试匹配多键命令（如 gg、gt）
       keyBuffer.push(key);
 
-      const multiAction = keyMapper.getActionForKey(keyBuffer.value);
+      const multiAction = keyMapper.getAction(keyBuffer.value);
       if (multiAction && commandActions[multiAction]) {
         e.preventDefault();
         commandActions[multiAction]();

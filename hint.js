@@ -112,8 +112,6 @@ const VimHint = {
     }
 
     const results = [];
-    const vW = window.innerWidth;
-    const vH = window.innerHeight;
 
     const walker = document.createTreeWalker(
       document.body,
@@ -143,14 +141,8 @@ const VimHint = {
 
     while (walker.nextNode()) {
       const el = walker.currentNode;
-      const rect = el.getBoundingClientRect();
 
-      if (rect.width === 0 || rect.height === 0) continue;
-      if (rect.bottom < 0 || rect.top > vH) continue;
-      if (rect.right < 0 || rect.left > vW) continue;
-
-      const style = window.getComputedStyle(el);
-      if (style.visibility === 'hidden' || style.display === 'none' || style.opacity === '0') continue;
+      if (!Utils.isVisible(el, { checkViewport: true })) continue;
 
       results.push(el);
     }
