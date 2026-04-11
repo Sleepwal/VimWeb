@@ -40,6 +40,8 @@ const blacklistInput = document.getElementById('blacklist');
 const blacklistStatus = document.getElementById('blacklist-status');
 /** @type {HTMLElement} 快捷键映射列表容器 */
 const keyMappingsList = document.getElementById('key-mappings-list');
+/** @type {HTMLSelectElement} 快捷键预设方案下拉框 */
+const keyPresetSelect = document.getElementById('key-preset-select');
 /** @type {HTMLButtonElement} 重置映射按钮 */
 const resetMappingsBtn = document.getElementById('reset-mappings-btn');
 /** @type {HTMLButtonElement} 导出映射按钮 */
@@ -119,6 +121,58 @@ const DEFAULT_KEY_MAPPINGS = {
 /** @type {Object<string, string>} 用户自定义映射（从存储加载） */
 let userMappings = {};
 
+/**
+ * 快捷键预设方案定义
+ *
+ * 每个预设方案是一个完整的按键-命令映射对象。
+ * 选择预设方案后，将覆盖当前用户映射。
+ *
+ * @type {Object<string, {name: string, mappings: Object<string, string>}>}
+ */
+const KEY_PRESETS = {
+  default: {
+    name: '默认方案',
+    mappings: {
+      'j': 'scrollDown', 'k': 'scrollUp', 'h': 'scrollLeft', 'l': 'scrollRight',
+      'gg': 'scrollToTop', 'G': 'scrollToBottom',
+      'f': 'enterHintMode', ' ': 'clickAtCursor',
+      'q': 'goBack', 'Q': 'goBack',
+      'x': 'closeTab', 'X': 'restoreTab',
+      'gt': 'nextTab', 'gT': 'prevTab', 'b': 'showTabList',
+      '/': 'openSearch', 'n': 'searchNext', 'N': 'searchPrev', '*': 'searchWordUnderCursor',
+      'B': 'openBookmarks', 'H': 'openHistory',
+      'gi': 'jumpToLastInput', 'gI': 'jumpToFirstInput',
+      ']]': 'jumpToNextLink', '[[': 'jumpToPrevLink'
+    }
+  },
+  vimium: {
+    name: 'Vimium 风格',
+    mappings: {
+      'j': 'scrollDown', 'k': 'scrollUp', 'h': 'scrollLeft', 'l': 'scrollRight',
+      'gg': 'scrollToTop', 'G': 'scrollToBottom',
+      'f': 'enterHintMode', 'F': 'enterHintMode',
+      'q': 'goBack',
+      'x': 'closeTab', 'X': 'restoreTab',
+      'J': 'nextTab', 'K': 'prevTab', 'b': 'showTabList',
+      '/': 'openSearch', 'n': 'searchNext', 'N': 'searchPrev',
+      'B': 'openBookmarks', 'H': 'openHistory',
+      'gi': 'jumpToLastInput', 'gI': 'jumpToFirstInput',
+      ']]': 'jumpToNextLink', '[[': 'jumpToPrevLink'
+    }
+  },
+  minimal: {
+    name: '精简模式',
+    mappings: {
+      'j': 'scrollDown', 'k': 'scrollUp',
+      'gg': 'scrollToTop', 'G': 'scrollToBottom',
+      'f': 'enterHintMode',
+      'x': 'closeTab', 'X': 'restoreTab',
+      'gt': 'nextTab', 'gT': 'prevTab',
+      '/': 'openSearch', 'n': 'searchNext', 'N': 'searchPrev'
+    }
+  }
+};
+
 // ==========================================
 // 初始化
 // ==========================================
@@ -146,6 +200,9 @@ if (blacklistInput) {
 
 if (resetMappingsBtn) {
   resetMappingsBtn.addEventListener('click', resetKeyMappings);
+}
+if (keyPresetSelect) {
+  keyPresetSelect.addEventListener('change', handleKeyPresetChange);
 }
 if (exportMappingsBtn) {
   exportMappingsBtn.addEventListener('click', exportKeyMappings);
@@ -375,7 +432,78 @@ async function loadKeyMappings() {
   const items = await Utils.StorageManager.get(['keyMappings']);
   userMappings = items.keyMappings || {};
 
+  _detectPreset();
   renderKeyMappings();
+}
+
+/**
+ * 检测当前映射匹配哪个预设方案
+ *
+ * 比较用户映射与各预设方案的映射，如果完全匹配则选中该预设。
+ * 如果不匹配任何预设，则显示"自定义"。
+ * @private
+ */
+function _detectPreset() {
+  if (!keyPresetSelect) return;
+
+  const currentMappings = { ...DEFAULT_KEY_MAPPINGS, ...userMappings };
+
+  for (const [presetId, preset] of Object.entries(KEY_PRESETS)) {
+    const presetMappings = preset.mappings;
+    const allKeys = new Set([...Object.keys(currentMappings), ...Object.keys(presetMappings)]);
+
+    let matches = true;
+    for (const key of allKeys) {
+      if (currentMappings[key] !== presetMappings[key]) {
+        matches = false;
+        break;
+      }
+    }
+
+    if (matches) {
+      keyPresetSelect.value = presetId;
+      return;
+    }
+  }
+
+  keyPresetSelect.value = 'custom';
+}
+
+/**
+ * 处理预设方案变更
+ *
+ * 选择预设方案后，将用户映射替换为预设方案的映射。
+ * 选择"自定义"时不做任何操作。
+ */
+async function handleKeyPresetChange() {
+  const presetId = keyPresetSelect.value;
+  if (presetId === 'custom') return;
+
+  const preset = KEY_PRESETS[presetId];
+  if (!preset) return;
+
+  const defaultMappings = KEY_PRESETS.default.mappings;
+  userMappings = {};
+
+  for (const [key, action] of Object.entries(preset.mappings)) {
+    if (defaultMappings[key] !== action) {
+      userMappings[key] = action;
+    }
+  }
+
+  for (const [key, action] of Object.entries(defaultMappings)) {
+    if (!(key in preset.mappings)) {
+      userMappings[key] = '__disabled__';
+    }
+  }
+
+  userMappings = Object.fromEntries(
+    Object.entries(userMappings).filter(([_, v]) => v !== '__disabled__')
+  );
+
+  await saveKeyMappings();
+  renderKeyMappings();
+  showStatus(`已切换到「${preset.name}」`, mappingsStatus);
 }
 
 /**

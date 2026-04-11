@@ -73,6 +73,16 @@
         <h2>快捷键映射</h2>
         <p class="description">自定义快捷键与命令的映射关系。点击"录制"按钮后按下新快捷键即可重新绑定。</p>
 
+        <div class="control-row">
+          <label for="key-preset-select">预设方案：</label>
+          <select id="key-preset-select">
+            <option value="default">默认方案</option>
+            <option value="vimium">Vimium 风格</option>
+            <option value="minimal">精简模式</option>
+            <option value="custom">自定义</option>
+          </select>
+        </div>
+
         <div id="key-mappings-list" class="key-mappings-list"></div>
 
         <div class="actions">
